@@ -8,6 +8,7 @@
     - [1. 스프링 시큐리티 설정하기](#스프링-시큐리티-설정하기)
     - [2. properties 활용하여 인메모리 유저 추가](#properties-활용하여-인메모리-유저-추가)
     - [3. configure 활용하여 인메모리 유저 추가](#configure-활용하여-인메모리-유저-추가)
+- [2. JPA 를 활용한 spring security](#JPA-를-활용한-spring-security)
     
 # Spring Security 적용
 
@@ -98,3 +99,125 @@ protected void configure(AuthenticationManagerBuilder auth) throws Exception {
             .roles("ADMIN");
 }
 ~~~
+
+# JPA 를 활용한 spring security
+
+UserDetailsService.interface DAO(Data Access Object) 를 통해서 DB DATA의 유저 정보를 읽어옵니다.
+`DB 저장소에 들어있는 유저정보를 가지고 인증을 할때 사용`하는 인터페이스 입니다.
+
+~~~
+@Entity
+public class Account {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    @Column(unique = true)
+    private String username;
+
+    private String password;
+    private String role;
+
+    // Getter, Setter
+
+    // 암호를 인코더하는 메소드
+    public void encodePassword() {
+        this.password = "{noop}" + this.password;
+    }
+}
+
+public interface AccountRepository extends JpaRepository<Account, Long> {
+    Account findByUsername(String username);
+}
+
+@Service
+public class AccountService implements UserDetailsService {
+
+    private final AccountRepository accountRepository;
+
+    public AccountService(AccountRepository accountRepository) {
+        this.accountRepository = accountRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        Account account = accountRepository.findByUsername(username);
+
+        /**
+         * Username 값이 DATA DB 에 존재하지 않는 경우
+         * UsernameNotFoundException 에러 메소드를 사용합니다.
+         * */
+        if (account == null) {
+            throw new UsernameNotFoundException(username);
+        }
+
+        /**
+         * Username 값이 DATA DB 에 존재하는 경우
+         * Account 타입을 -> UserDetails 타입으로 변경하여 반환해야합니다.
+         * 이때 타입을 변환하도록 도와주는 User.class 를 사용합니다.
+         *
+         * @see User
+         * */
+
+        return User
+                .builder()
+                .username(account.getUsername())
+                .password(account.getPassword())
+                .roles(account.getRole())
+                .build();
+    }
+
+    /**
+     * 사용자로부터 받은 password 값을 encode 암호화 해서 저장합니다.
+     */
+    public Account save(Account account) {
+        account.encodePassword();
+        return accountRepository.save(account);
+    }
+}
+
+@RestController
+public class AccountController {
+
+    private final AccountRepository accountRepository;
+
+    public AccountController(AccountRepository accountRepository) {
+        this.accountRepository = accountRepository;
+    }
+
+    @GetMapping("/account/{username}/{password}/{role}")
+    public Account createAccount(
+            @ModelAttribute
+                    Account account
+    ) {
+        return accountRepository.save(account);
+    }
+}
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .authorizeRequests()
+                .mvcMatchers(
+                        "/",
+                        "/info",
+>                        "/account/**"
+                )
+                .permitAll();
+
+        // "/account/**" 추가 함므로써 해당 경로의 모든곳은 인증요청을 하지 않습니다.
+    }
+}
+~~~
+
+Spring Security 에서 명시적으로 선언을 하려면 SecurityConfig.class 에서
+AccountService 의존성 주입을 받고 configure(AuthenticationManagerBuilder auth) 메소드에서 
+AccountService.class 가 UserDetailsService 구현체를 사용해서 유저 정보를 DB 에서 가져와서 사용하라고 
+auth.getDefaultUserDetailsService(accountService) 선언해줍니다.
+
+하지만 UserDetailsService Bean으로 등록만 되어있으면 해당 class를 자동으로 참조하여 사용합니다.
