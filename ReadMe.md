@@ -9,6 +9,7 @@
     - [2. properties 활용하여 인메모리 유저 추가](#properties-활용하여-인메모리-유저-추가)
     - [3. configure 활용하여 인메모리 유저 추가](#configure-활용하여-인메모리-유저-추가)
 - [2. JPA 를 활용한 spring security](#JPA-를-활용한-spring-security)
+- [3. PasswordEncoder](#PasswordEncoder)
     
 # Spring Security 적용
 
@@ -221,3 +222,57 @@ AccountService.class 가 UserDetailsService 구현체를 사용해서 유저 정
 auth.getDefaultUserDetailsService(accountService) 선언해줍니다.
 
 하지만 UserDetailsService Bean으로 등록만 되어있으면 해당 class를 자동으로 참조하여 사용합니다.
+
+# PasswordEncoder
+
+- 비밀번호는 반드시 인코딩해서 저장해야 합니다. 단방향 암호화 알고리듬으로.
+    - 스프링 시큐리티가 제공하는 PasswordEndoer는 특정한 포맷으로 동작함.
+    - {id}encodedPassword
+    - 다양한 해싱 전략의 패스워드를 지원할 수 있다는 장점이 있습니다.
+
+~~~
+@Bean
+public PasswordEncoder passwordEncoder() {
+    // Spring Security 5 권장하는 인코더
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+}
+
+@Service
+public class AccountService implements UserDetailsService {
+
+    private final PasswordEncoder passwordEncoder;
+
+    public AccountService(
+            PasswordEncoder passwordEncoder
+    ) {
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    ...
+
+    public Account save(Account account) {
+        account.encodePassword(passwordEncoder);
+        return accountRepository.save(account);
+    }
+}
+
+@Entity
+public class Account {
+    ...
+
+    public void encodePassword(PasswordEncoder passwordEncoder) {
+        this.password = passwordEncoder.encode(this.password);
+    }
+}
+
+결과 - 
+
+{
+    id: 1,
+    username: "asd",
+    password: "{bcrypt}$2a$10$JwEOVmVJKZQA84K.tSjZRu/7arq/UJsLdP/mjCBqxF99UC3Kq0xrK",
+    role: "ADMIN"
+}
+~~~
+
+Spring Security 5 권장하는 인코더 PasswordEncoderFactories 사용하여 정상적으로 인코더 하였습니다.
