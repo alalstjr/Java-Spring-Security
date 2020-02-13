@@ -1,5 +1,6 @@
 package com.example.project.controller;
 
+import com.example.project.service.SampleService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,6 +10,12 @@ import java.util.jar.Attributes;
 
 @Controller
 public class SampleController {
+
+    private final SampleService sampleService;
+
+    public SampleController(SampleService sampleService) {
+        this.sampleService = sampleService;
+    }
 
     /**
      * 비로그인 and 로그인 사용자 둘다의 조건으로 접근제어할 경우
@@ -48,6 +55,7 @@ public class SampleController {
                 "message",
                 "Hello~ dashboard~! :" + principal.getName()
         );
+        sampleService.dashboard();
         return "dashboard";
     }
 

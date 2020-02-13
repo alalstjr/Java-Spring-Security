@@ -10,6 +10,9 @@
     - [3. configure 활용하여 인메모리 유저 추가](#configure-활용하여-인메모리-유저-추가)
 - [2. JPA 를 활용한 spring security](#JPA-를-활용한-spring-security)
 - [3. PasswordEncoder](#PasswordEncoder)
+- [4. Spring Security Test Code](#Spring-Security-Test-Code)
+     - [1. Form Login 테스트](#Form-Login-테스트)
+- [5. SecurityContextHolder와 Authentication](#SecurityContextHolder와-Authentication)
     
 # Spring Security 적용
 
@@ -396,3 +399,136 @@ public void index_user() throws Exception {
             .andDo(print());
 }
 ~~~
+
+## Form Login 테스트
+
+~~~
+/**
+    * @Transactional 해당 메소드의 테스트가 끝나면 초기화해줍니다.
+    *
+    * formLogin() 메소드로 로그인을 시도하고
+    * authenticated() 인증 상태를 체크합니다.
+    */
+@Test
+@Transactional
+public void login() throws Exception {
+    // 새로운 유저정보를 DB 에 등록합니다.
+    String username = "user";
+    String password = "1234";
+    this.createUser(
+            username,
+            password
+    );
+
+    mockMvc
+            .perform(formLogin()
+                    .user(username)
+                    .password(password))
+            .andExpect(authenticated())
+            .andDo(print());
+}
+
+private Account createUser(
+        String username,
+        String password
+) {
+    Account account = new Account();
+    account.setUsername(username);
+    account.setPassword(password);
+    account.setRole("USER");
+
+    accountService.save(account);
+
+    return account;
+}
+~~~
+
+# SecurityContextHolder와 Authentication
+
+- Authentication
+    - Principal과 GrantAuthority 제공.
+
+- Principal
+    - “누구"에 해당하는 정보. 
+    - UserDetailsService에서 리턴한 그 객체.
+    - 객체는 UserDetails 타입.
+
+- GrantAuthority: 
+    - “ROLE_USER”, “ROLE_ADMIN”등 Principal이 가지고 있는“권한”을 나타낸다.
+    - 인증 이후, 인가 및 권한 확인할 때 이 정보를 참조한다.
+
+- UserDetails
+    - 애플리케이션이 가지고 있는 유저 정보와 스프링 시큐리티가 사용하는Authentication 객체 사이의 어댑터.
+    - UserDetailsService
+    - 유저 정보를 UserDetails 타입으로 가져오는 DAO (Data Access Object) 인터페이스.
+
+
+사용자가 애플리케이션에서 인증을 거치고 나면 `인증된 사용자 정보(Principal)를 Authentication 객체 내부에 담아서 관리`를 하고 
+Authentication 객체를 SecurityContext 다음 SecurityContextHolder 담아서 가지고 있습니다.
+
+SecurityContextHolder 객체는 SecurityContext를 제공해주는데 기본적인 방법이 ThreadLocal을 사용하는 것입니다.
+ThreadLocal은 한 Thread 내에서 공유하는 저장소 
+그러면 애플리케이션 어디서나 접근이 가능합니다.
+SecurityContextHolder는 하나의 Thread에 특화되어 있으므로 만약 Thread가 달라질경우 Authentication값을 가져올 수 없습니다.
+
+서블릿 기반의 웹 애플리케이션은 어떠한 요청이 들어올경우 처리되는 Thread는 명시적으로 비동기적으로 사용하지 않는 이상 동일한 Thread가 작업을 처리하게 됩니다. Servlet Container 기본적인 동작 방법입니다. 하나의 Request 마다 하나의 Thread 를 사용한다.
+그렇다고해서 요청이 들어올때마다 새로운 Thread를 만드는 것이 아닌 
+어떠한 요청을 Servlet 톰켓이 받았을 때 어떠한 Thread에 배정하는 지는 Connect 톰켓이 하는일이고 최종적으로 애플리케이션 내부로 들어오면서 로직이 실행될때는 대부분 하나의 Thread가 담당하게 됩니다.
+
+그러면 principal 값을 매개변수로 넘겨주고 받아서 사용할 필요없이 SecurityContextHolder 통해서 값을 가져와서 확인할 수 있습니다.
+
+~~~
+@Service
+public class SampleService {
+
+    // 현재 로그인한 사용자 정보를 참조할 때
+    public void dashboard() {
+        System.out.println("dashboard");
+        Authentication authentication = SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+
+        // 인증이 완료된 사용자의 정보
+        Object principal = authentication.getPrincipal();
+
+        // 사용자가 가지고 있는 권한을 나타냅니다. 권한은 ADMIN, USER ... 등등 여러개일수도 있으니 Collection
+        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+
+        // 인증이 완료된 사용자인지 판별합니다.
+        boolean authenticated = authentication.isAuthenticated();
+    }
+}
+~~~
+
+각각의 정보에 디버그를 찍어서 확인하면 어떠한 값이 들어가나 확인할 수 있습니다.
+
+디버그 정보의 
+authentication 타입을 확인하면 여러개의 구현체가 존재합니다.
+FormLogin 의 경우 UsernamePasswordAuthenticationToken 으로 return 되어 있습니다.
+
+최종적으로 SecurityContextHolder 내부에 Authentication 형식으로 담기는 것입니다.
+
+SecurityContextHolder 내부에는 필수로 인증이 완료된 정보만 저장이 됩니다.
+
+Authentication 내부에는 principal 그리고 GrantAuthority 정보가 들어있습니다.
+
+~~~
+@Service
+public class AccountService implements UserDetailsService {
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return User
+                .builder()
+                .username(account.getUsername())
+                .password(account.getPassword())
+                .roles(account.getRole())
+                .build();
+    }
+~~~
+
+principal 타입은 User 입니다.
+UserDetailsService 타입의 구현체에서 return User 가 principal 입니다.
+
+authorities 값은 1개만 존재하는것을 확인할 수 있습니다.
+"ROLE_USER" 해당 정보도 UserDetailsService 구현할때 정보를 주었습니다.
