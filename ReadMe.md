@@ -13,6 +13,8 @@
 - [4. Spring Security Test Code](#Spring-Security-Test-Code)
      - [1. Form Login 테스트](#Form-Login-테스트)
 - [5. SecurityContextHolder와 Authentication](#SecurityContextHolder와-Authentication)
+- [6. AuthenticationManager와 Authentication](#AuthenticationManager와-Authentication)
+    - [1. AuthenticationManager 인증 과정](#AuthenticationManager-인증-과정)
     
 # Spring Security 적용
 
@@ -445,6 +447,8 @@ private Account createUser(
 
 # SecurityContextHolder와 Authentication
 
+Authentication 정보를 담고있는 저장소 인터페이스
+
 - Authentication
     - Principal과 GrantAuthority 제공.
 
@@ -532,3 +536,132 @@ UserDetailsService 타입의 구현체에서 return User 가 principal 입니다
 
 authorities 값은 1개만 존재하는것을 확인할 수 있습니다.
 "ROLE_USER" 해당 정보도 UserDetailsService 구현할때 정보를 주었습니다.
+
+# AuthenticationManager와 Authentication
+
+Authentication 정보를 만들고 인증을 처리하는 인터페이스 
+
+AuthenticationManager 내부에는 authenticate 메소드 하나만 존재합니다.
+
+Authentication authenticate(Authentication authentication) 전달 인자로 받은 `Authentication 객체가 인증 정보`를 담고있습니다.
+
+authentication 값이 유효한지 확인 후 유효하다면 인증된 UserDetailsService 가 return 한 principal 정보를 담고있는 authenticate 객체를 return 합니다.
+
+`비밀번호가 잘못되었다면` BadCredentialsException 발생
+`계정이 잠겨있다면` LockedException 발생
+`계정이 비활성화 되어있다면` DisabledException 발생
+
+AuthenticationManager 구현체로는 보통 `ProviderManager.class`를 사용합니다.
+
+인증과정을 살펴보기 위해서 ProviderManager.class 의 authenticate() 메소드에 디버거를 찍습니다.
+
+인자로 받은 Authentication authentication 객체에는 
+Client 에서 전달받은 principal 값과 credentials 값을 전달 받았습니다.
+2개의 전달받은 값으로 인증을 시작해야 합니다.
+
+## AuthenticationManager 인증 과정
+
+~~~
+ProviderManager.class
+
+for (AuthenticationProvider provider : getProviders()) {
+
+    // F7 눌러 적용된 프로바이더를 확인합니다.
+    if (!provider.supports(toTest)) {
+        continue;
+    }
+    ...
+}
+~~~
+
+ProviderManager.class 가 직접 인증을 하는것이 아니라
+다른 `AuthenticationProvider 에게 위임`을 해서
+`여러개의 provider 를 사용해서 인증`을 합니다.
+
+ProviderManager.class 의 AuthenticationProvider 로 단 하나의 익명 사용자를 인증하는 `AnonymousAuthenticationProvider 를 가지고 있습니다.`
+이는 Client 에서 전달해준 Authentication authentication 값의 실제 `UsernamePasswordAuthenticationToken.class 를 처리할 수 있는 provider 가 아니므로 그냥 넘어갑니다.`
+
+최종적으로 `ProviderManager.class 내부에는 UsernamePasswordAuthenticationToken.class 를 처리할 수 있는 provider 가 존재하지 않습니다.`
+
+~~~
+ProviderManager.class
+
+if (result == null && parent != null) {
+    // Allow the parent to try.
+    try {
+        result = parentResult = parent.authenticate(authentication);
+    }
+    ...
+}
+~~~
+
+현재 ProviderManager에게 처리 할수 있는 Provider가 존재하지 않을경우 `ProviderManager의 Parent에게 위임한다.`
+이런경우 parent.authenticate 로 가게됩니다.
+
+~~~
+ProviderManager.class
+
+for (AuthenticationProvider provider : getProviders()) {
+    // F7 눌러 적용된 프로바이더를 확인합니다.
+    if (!provider.supports(toTest)) {
+        continue;
+    }
+}
+~~~
+
+다시한번 전달받은 authentication `타입과 맞는 Provider 가 존재하는지 탐색` 합니다. 이번엔 `UsernamePasswordAuthenticationToken 타입의 Provider 를 찾았습니다.`
+
+~~~
+ProviderManager.class
+
+// F7 눌러 적용된 프로바이더를 확인합니다.
+result = provider.authenticate(authentication);
+~~~
+
+`AbstractUserDetailsAuthenticationProvider`
+해당 Provider 의 인증을 호출합니다.
+`UserDetailsService 를 사용해서 인증을 해주는 Provider` 입니다.
+
+~~~
+AbstractUserDetailsAuthenticationProvider.class
+
+try {
+    // F7 눌러 해당 클래스로 들어갑니다.
+    user = retrieveUser(username,
+            (UsernamePasswordAuthenticationToken) authentication);
+}
+~~~
+
+`retrieveUser 매소드에서 우리가 구현한 UserDetailsService 로 연결`이 됩니다.
+DaoAuthenticationProvider.class 로 연결이 됩니다.
+
+~~~
+DaoAuthenticationProvider.class
+
+protected final UserDetails retrieveUser() {
+    try {
+        // F7 눌러 해당 클래스로 들어갑니다.
+        UserDetails loadedUser = this.getUserDetailsService().loadUserByUsername(username);
+    }
+    ...
+}
+~~~
+
+DaoAuthenticationProvider.class 가지고있는 `getUserDetailsService 값은 개발자가 구현한 UserDetailsService 의 구현체 (AccountService)` 입니다.
+결론은 드디어 `개발자가 구현한 코드로 연결이 되는 구간`입니다.
+
+~~~
+AbstractUserDetailsAuthenticationProvider.class
+
+try {
+    preAuthenticationChecks.check(user);
+    additionalAuthenticationChecks(user,
+            (UsernamePasswordAuthenticationToken) authentication);
+}
+~~~
+
+다음 유저의 계정이 잠겨있는지 등등 계정의 상태를 체크하는 구간입니다.
+
+이제 디버그 결과값을 확인해 봅니다.
+`사용자가 전달한 authentication 값은 문자열`로 저장이 되어있었습니다.
+인증이 위와같은 진행 되면서 `result 값의 authentication 를 확인하면 개발자가 UserDetailsService 구현체로 구현한 User 객체로 구현`이 되어있을것을 확인합니다.
