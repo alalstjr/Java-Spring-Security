@@ -276,3 +276,123 @@ public class Account {
 ~~~
 
 Spring Security 5 권장하는 인코더 PasswordEncoderFactories 사용하여 정상적으로 인코더 하였습니다.
+
+# Spring Security Test Code
+
+- RequestPostProcessor를 사용해서 테스트 하는 방법
+    - with(user(“user”))
+    - with(anonymous())
+    - with(user(“user”).password(“123”).roles(“USER”, “ADMIN”))
+    - 자주 사용하는 user  객체는 리팩토리으로 빼내서 재사용 가능.
+
+- 애노테이션을 사용하는 방법
+    - @WithMockUser
+    - @WithMockUser(roles=”ADMIN”)
+    - 커스텀 애노테이션을 만들어 재사용 가능.
+
+- Test Code 상에서 DATA DB 변경, 접근 사항이 있다면
+    - @Transactional 어노테이션을 붙여주어 독립적인 테스트로 만들어주면 좋습니다.
+    - 클레스 전체 Test 실행시 사용자 추가가 중복으로 일어나므로 해당 메소드의 결과값을 초기화 하는것입니다.
+
+의존성 추가
+
+~~~
+testImplementation('org.springframework.security:spring-security-test')
+~~~
+
+Test Code
+
+~~~
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class AccountControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    /**
+     * 일반적인 익명의 접근의 Test
+     *
+     * @WithAnonymousUser == with(anonymous())
+     */
+    @Test
+    // @WithAnonymousUser 어노테이션을 활용한 익명의 user 접근
+    public void index_annoymous() throws Exception {
+        mockMvc
+                .perform(get("/").with(anonymous()))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+
+    /**
+     * user -> user
+     * <p>
+     * 특정 Role 값을 가지고있는 접근 Test
+     * with( user() ) 를 사용합니다. user() 는 spring security test 에서 제공하는 메소드 입니다.
+     * 가상의 user 를 만들어 요청하는 방법입니다.
+     *
+     * @WithMockUser(username = "", roles = "") == with(user("jjunpro").roles("USER"))
+     */
+    @Test
+    // @WithMockUser(username = "jjunpro", roles = "USER") 어노테이션을 활용한 user 접근
+    public void index_user() throws Exception {
+        mockMvc
+                .perform(get("/").with(user("jjunpro").roles("USER")))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+
+    /**
+     * user -> admin
+     * <p>
+     * admin 페이지에 user 권한이 접근하는 경우
+     * 권한이 맞지않으므로 403 error forbidden 발생합니다.
+     */
+    @Test
+    public void admin_user() throws Exception {
+        mockMvc
+                .perform(get("/admin").with(user("jjunpro").roles("USER")))
+                .andExpect(status().isForbidden())
+                .andDo(print());
+    }
+
+    /**
+     * admin -> admin
+     * <p>
+     * admin 페이지에 admin 권한이 접근하는 경우
+     * 200 접근 성공입니다.
+     */
+    @Test
+    // @WithMockUser(username = "jjunpro", roles = "ADMIN") 어노테이션을 활용한 admin 접근
+    public void admin_admin() throws Exception {
+        mockMvc
+                .perform(get("/admin").with(user("jjunpro").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+}
+~~~
+
+가상의 유저정보를 어노테이션으로 만들때 `중복으로 코드`를 작성해야 하는경우 
+`커스텀 어노테이션`을 따로 만들어서 적용하면 됩니다.
+
+~~~
+@Retention(RetentionPolicy.RUNTIME)
+@WithMockUser(username = "jjunpro", roles = "USER")
+public @interface WithUser { }
+
+@Test
+@WithUser
+public void index_user() throws Exception {
+    mockMvc
+            .perform(get("/"))
+            .andExpect(status().isOk())
+            .andDo(print());
+}
+~~~
