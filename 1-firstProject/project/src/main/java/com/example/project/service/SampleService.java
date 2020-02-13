@@ -1,5 +1,7 @@
 package com.example.project.service;
 
+import com.example.project.context.AccountContext;
+import com.example.project.domain.Account;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,7 +14,6 @@ public class SampleService {
 
     // 현재 로그인한 사용자 정보를 참조할 때
     public void dashboard() {
-        System.out.println("dashboard");
         Authentication authentication = SecurityContextHolder
                 .getContext()
                 .getAuthentication();
@@ -25,5 +26,9 @@ public class SampleService {
 
         // 인증이 완료된 사용자인지 판별합니다.
         boolean authenticated = authentication.isAuthenticated();
+
+        // ThreadLocal을 사용하여 메소드 파라미터를 받지 않아도 유저의 정보를 가져와서 사용하였습니다.
+        Account account = AccountContext.getAccount();
+        System.out.println(account.getUsername());
     }
 }

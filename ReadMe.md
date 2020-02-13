@@ -15,7 +15,8 @@
 - [5. SecurityContextHolder와 Authentication](#SecurityContextHolder와-Authentication)
 - [6. AuthenticationManager와 Authentication](#AuthenticationManager와-Authentication)
     - [1. AuthenticationManager 인증 과정](#AuthenticationManager-인증-과정)
-    
+- [7. ThreadLocal](#ThreadLocal)
+
 # Spring Security 적용
 
 의존성 추가
@@ -665,3 +666,62 @@ try {
 이제 디버그 결과값을 확인해 봅니다.
 `사용자가 전달한 authentication 값은 문자열`로 저장이 되어있었습니다.
 인증이 위와같은 진행 되면서 `result 값의 authentication 를 확인하면 개발자가 UserDetailsService 구현체로 구현한 User 객체로 구현`이 되어있을것을 확인합니다.
+
+# ThreadLocal
+
+하나의 Thread 내에서 변수..등등 자원 을 공유하는 것
+
+- Java.lang 패키지에서 제공하는 쓰레드 범위 변수. 즉, 쓰레드 수준의 데이터 저장소.
+    - 같은 쓰레드 내에서만 공유.
+    - 따라서 같은 쓰레드라면 해당 데이터를 메소드 매개변수로 넘겨줄 필요 없음.
+    - `SecurityContextHolder의 기본 전략.`
+
+간단예제
+
+~~~
+public class AccountContext {
+
+    // Account 를 저장할 수 있는 ThreadLocal 하나 만듭니다.
+    private static final ThreadLocal<Account> ACCOUNT_THREAD_LOCAL = new ThreadLocal<>();
+
+    // ThreadLocal 내부에 저장하는 메소드
+    public static void setAccount(Account account) {
+        ACCOUNT_THREAD_LOCAL.set(account);
+    }
+
+    // ThreadLocal 내부에 저장된 정보를 가져오는 메소드
+    public static Account getAccount() {
+        return ACCOUNT_THREAD_LOCAL.get();
+    }
+}
+
+@Controller
+public class SampleController {
+
+    private final SampleService sampleService;
+    private final AccountRepository accountRepository;
+
+    @GetMapping("/dashboard")
+    public String dashboard(
+            Model model,
+            Principal principal
+    ) {
+        // 등록된 유저의 Account 정보를 조회 후 ThreadLocal 에 저장하였습니다.
+        AccountContext.setAccount(accountRepository.findByUsername(principal.getName()));
+
+        sampleService.dashboard();
+
+        return "dashboard";
+    }
+}
+
+@Service
+public class SampleService {
+
+    public void dashboard() {
+        // ThreadLocal을 사용하여 메소드 파라미터를 받지 않아도 유저의 정보를 가져와서 사용하였습니다.
+        Account account = AccountContext.getAccount();
+        System.out.println(account.getUsername());
+    }
+}
+~~~

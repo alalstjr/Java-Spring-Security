@@ -1,5 +1,7 @@
 package com.example.project.controller;
 
+import com.example.project.context.AccountContext;
+import com.example.project.repository.AccountRepository;
 import com.example.project.service.SampleService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -11,23 +13,32 @@ import java.util.jar.Attributes;
 @Controller
 public class SampleController {
 
-    private final SampleService sampleService;
+    private final SampleService     sampleService;
+    private final AccountRepository accountRepository;
 
-    public SampleController(SampleService sampleService) {
+    public SampleController(
+            SampleService sampleService,
+            AccountRepository accountRepository
+    ) {
         this.sampleService = sampleService;
+        this.accountRepository = accountRepository;
     }
 
     /**
      * 비로그인 and 로그인 사용자 둘다의 조건으로 접근제어할 경우
      */
     @GetMapping("/")
-    public String index(Model model, Principal principal) {
+    public String index(
+            Model model,
+            Principal principal
+    ) {
         if (principal != null) {
             model.addAttribute(
                     "message",
                     "Hello~ Index~!" + principal.getName()
             );
-        } else {
+        }
+        else {
             model.addAttribute(
                     "message",
                     "Hello~ Index~!"
@@ -55,6 +66,10 @@ public class SampleController {
                 "message",
                 "Hello~ dashboard~! :" + principal.getName()
         );
+
+        // 등록된 유저의 Account 정보를 ThreadLocal 에 저장하였습니다.
+        AccountContext.setAccount(accountRepository.findByUsername(principal.getName()));
+
         sampleService.dashboard();
         return "dashboard";
     }
