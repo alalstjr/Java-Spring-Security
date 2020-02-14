@@ -18,6 +18,8 @@
 - [7. ThreadLocal](#ThreadLocal)
 - [8. Authentication과 SecurityContextHodler](#Authentication과-SecurityContextHodler)
 - [9. 스프링 시큐리티 Filter와 FilterChainProxy](#스프링-시큐리티-Filter와-FilterChainProxy)
+- [10. DelegatingFilterProxy와 FilterChainProxy](#DelegatingFilterProxy와-FilterChainProxy)
+- [11. 인증,체인,필터 최종 정리](#인증,체인,필터-최종-정리)
 
 # Spring Security 적용
 
@@ -882,6 +884,9 @@ public class AllAuthNoneConfig extends WebSecurityConfigurerAdapter {
 AllAuthConfig 설정은 form 인증 httpbasic 설정이 존재해서 Filter 정보가 더 많이 존재하는 것입니다.
 결론은 `사용자의 설정에 따라서 Filter 의 목록은 달라집니다.`
 
+Filter 접근 순서를 @Order 로 설정하는 것 보다는 
+antMatcher("") 메소드로 직접 명시적으로 설정하는게 좋습니다.
+
 ~~~
 FilterChainProxy.class
 
@@ -904,3 +909,54 @@ private void doFilterInternal(ServletRequest request, ServletResponse response,
 }
 ~~~
 
+# DelegatingFilterProxy와 FilterChainProxy
+
+사용자가 요청을 보내면 Servlet 기반의 애플리케이션 이기때문에 ServletContainer 가 정보를 받습니다.
+개발자가 사용하는 ServletContainer 는 Tomcat 입니다.
+ServletContainer 는 Servlet Spec 을 지원합니다.
+
+Servlet Spec 에는 Filter 라는 개념이 있습니다.
+
+- DelegatingFilterProxy
+    - 일반적인 서블릿 필터.
+    - 서블릿 필터 처리를 `스프링에 들어있는 빈으로 위임하고 싶을 때 사용`하는 서블릿 필터.
+    - 타겟 빈 이름을 설정한다.
+    - 스프링 부트 없이 스프링 시큐리티 설정할 때는 AbstractSecurityWebApplicationInitializer를 사용해서 등록.
+    - 스프링 부트를 사용할 때는 자동으로 등록 된다. (SecurityFilterAutoConfiguration)
+
+- FilterChainProxy
+    - 보통 “springSecurityFilterChain” 이라는 이름의 빈으로 등록된다.
+
+DelegatingFilterProxy.class 가 Spring Bean 으로 등록되어 있는 FilterChainProxy 에게 작업을 위임 하려면 Bean의 이름을 알아야 합니다.
+그 이름은 보통 springSecurityFilterChain 입니다.
+이름을 확인하는 방법은 SecurityFilterAutoConfiguration.class 의 DEFAULT_FILTER_NAME 으로 등록되있는것을 확인하면 됩니다.
+
+~~~
+public class SecurityFilterAutoConfiguration {
+
+	private static final String DEFAULT_FILTER_NAME = AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME;
+
+	@Bean
+	@ConditionalOnBean(name = DEFAULT_FILTER_NAME)
+	public DelegatingFilterProxyRegistrationBean securityFilterChainRegistration(
+			SecurityProperties securityProperties) {
+		DelegatingFilterProxyRegistrationBean registration = new DelegatingFilterProxyRegistrationBean(
+				DEFAULT_FILTER_NAME);
+		registration.setOrder(securityProperties.getFilter().getOrder());
+		registration.setDispatcherTypes(getDispatcherTypes(securityProperties));
+		return registration;
+	}
+...
+~~~
+
+# 인증,체인,필터 최종 정리
+
+SecurityContextHolder 가 Authentication 정보를 가지고 있습니다.
+
+AuthenticationManager 가 Authentication 의 정보를 가지고 인증을 합니다.
+인증된 Authentication 정보를 다시 SecurityContextHolder 내부에 넣어줍니다.
+넣는 과정에서 여러가지 Filter 들이 실행이 됩니다.
+
+이러한 여러가지 Filter 들은 FilterChainProxy 가 호출을 해줍니다.
+
+FilterChainProxy 는 DelegatingFilterProxy 를 통해서 접근을 합니다.
