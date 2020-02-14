@@ -6,8 +6,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 
-@Configuration
-@EnableWebSecurity
+//@Configuration
+// @EnableWebSecurity Spring Boot 에서 자동 등록을 해주므로 생략 가능
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Override

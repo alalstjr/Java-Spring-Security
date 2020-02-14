@@ -17,6 +17,7 @@
     - [1. AuthenticationManager 인증 과정](#AuthenticationManager-인증-과정)
 - [7. ThreadLocal](#ThreadLocal)
 - [8. Authentication과 SecurityContextHodler](#Authentication과-SecurityContextHodler)
+- [9. 스프링 시큐리티 Filter와 FilterChainProxy](#스프링-시큐리티-Filter와-FilterChainProxy)
 
 # Spring Security 적용
 
@@ -766,3 +767,140 @@ org.springframework.security.authentication.UsernamePasswordAuthenticationToken@
 둘의 주소값은 동일합니다.
 
 # 스프링 시큐리티 Filter와 FilterChainProxy
+
+~~~
+FilterChainProxy.class
+
+private List<Filter> getFilters(HttpServletRequest request) {
+
+디버그 > for (SecurityFilterChain chain : filterChains) {
+            if (chain.matches(request)) {
+                return chain.getFilters();
+            }
+        }
+
+    return null;
+}
+~~~
+
+SecurityFilterChain 의 특정한 요청이 매치가 되면 해당되는 필터를 가져와서 사용합니다.
+
+- 스프링 시큐리티가 제공하는 필터들
+    - WebAsyncManagerIntergrationFilter
+    - SecurityContextPersistenceFilter
+    - HeaderWriterFilter
+    - CsrfFilter
+    - LogoutFilter
+    - UsernamePasswordAuthenticationFilter
+    - DefaultLoginPageGeneratingFilter
+    - DefaultLogoutPageGeneratingFilter
+    - BasicAuthenticationFilter
+    - RequestCacheAwareFtiler
+    - SecurityContextHolderAwareReqeustFilter
+    - AnonymouseAuthenticationFilter
+    - SessionManagementFilter
+    - ExeptionTranslationFilter
+    - FilterSecurityInterceptor
+
+이 모든 필터는 FilterChainProxy가 호출한다.
+
+`위 SecurityFilterChain 필터의 목록이 만들어지고 커스텀 마이징하는 장소는 개발자가 만든 SecurityConfig.class 입니다.`
+
+~~~
+SecurityConfig.class
+
+@Configuration
+// @EnableWebSecurity Spring Boot 에서 자동 등록을 해주므로 생략 가능
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .formLogin()
+                .and()
+                .httpBasic();
+    }
+}
+~~~
+
+사용자의 커스텀 `SecurityConfig 자체가 Filter` 가 되는겁니다.
+그렇다는것은 여러개의 Filter를 제작 가능하다는 것입니다.
+
+SecurityFilterChain 목록이 추가가 되고 해당 Filter 에 맞는 정보를 매치해서 적용을 합니다.
+
+간단 예제
+
+~~~
+/**
+ * 모든 요청이 인증 없이 접근을 허용하는 Config
+ * */
+@Configuration
+@Order(Ordered.LOWEST_PRECEDENCE - 100) // 실행 우선순위를 최상위로 올립니다.
+public class AllAuthConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .authorizeRequests()
+                .mvcMatchers(
+                        "/",
+                        "/info",
+                        "/account/**"
+                )
+                .permitAll();
+
+        http
+                .authorizeRequests()
+                .mvcMatchers("/admin")
+                .hasRole("ADMIN");
+
+        http.formLogin();
+        http.httpBasic();
+    }
+}
+
+/**
+ * account 요청만 인증 없이 접근을 허용하는 Config
+ */
+@Configuration
+@Order(Ordered.LOWEST_PRECEDENCE - 10) // 실행 우선순위를 하위로 내립니다.
+public class AllAuthNoneConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .antMatcher("/account/**")
+                .authorizeRequests()
+                .anyRequest()
+                .permitAll();
+    }
+}
+~~~
+
+디버그 모드로 실행하면 filterChains 은 등록한 config의 2개가 출력되고
+우선순위 1위 의 모든 요청을 허용하는 AllAuthConfig 를 먼저 실행 합니다. 
+
+둘의 filter 정보를 보면 갯수가 다릅니다.
+
+AllAuthConfig 설정은 form 인증 httpbasic 설정이 존재해서 Filter 정보가 더 많이 존재하는 것입니다.
+결론은 `사용자의 설정에 따라서 Filter 의 목록은 달라집니다.`
+
+~~~
+FilterChainProxy.class
+
+private void doFilterInternal(ServletRequest request, ServletResponse response,
+        FilterChain chain) throws IOException, ServletException {
+
+    // Filter 목록들을 가져옵니다.
+    List<Filter> filters = getFilters(fwRequest);
+
+    if (filters == null || filters.size() == 0) {
+
+        // chain 정보를 가지고
+        chain.doFilter(fwRequest, fwResponse);
+
+    }
+
+    // VirtualFilterChain 객체 내부로 값을 전송합니다.
+    VirtualFilterChain vfc = new VirtualFilterChain(fwRequest, chain, filters);
+    vfc.doFilter(fwRequest, fwResponse);
+}
+~~~
+
