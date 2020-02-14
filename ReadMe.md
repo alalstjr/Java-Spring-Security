@@ -1088,3 +1088,50 @@ http
 ~~~
 
 AccessDecisionManager 자체를 커스텀 한것이 아니라 Voter 가 사용하는 DefaultWebSecurityExpressionHandler 만 커스텀 한것입니다.
+
+# FilterSecurityInterceptor
+
+AccessDecisionManager를 사용하여 Access Control 또는 예외 처리 하는 필터.
+대부분의 경우 FilterChainProxy에 제일 마지막 필터로 들어있다.
+
+인증이 완료된 상태에서 최종적으로 리소스에 접근하는 마지막에 체크하는 Filter
+
+# ExceptionTranslationFilter
+
+필터 체인에서 발생하는 AccessDeniedException과 AuthenticationException을 처리하는 필터
+
+FilterSecurityInterceptor 상위 클래스인 AbstractSecurityInterceptor 에서 발생한 Exception 처리를 합니다.
+
+- AuthenticationException 발생 시
+    - AuthenticationEntryPoint 실행
+    - AbstractSecurityInterceptor 하위 클래스(예, FilterSecurityInterceptor)에서 발생하는 예외만 처리.
+    - 그렇다면 UsernamePasswordAuthenticationFilter에서 발생한 인증 에러는 ExceptionTranslationFilter 내부에서 관리하지 않고 UsernamePasswordAuthenticationFilter 내부에서 관리합니다.
+
+- AccessDeniedException 발생 시
+    - 익명 사용자라면 AuthenticationEntryPoint 실행 사용자가 인증을 하도록 로그인페이지로 유도
+    - 익명 사용자(이미 인증된 사용자)가 아니면 AccessDeniedHandler에게 위임
+
+~~~
+ExceptionTranslationFilter.class
+
+디버그 > if (exception instanceof AuthenticationException) {
+    logger.debug(
+            "Authentication exception occurred; redirecting to authentication entry point",
+            exception);
+
+    sendStartAuthentication(request, response, chain,
+            (AuthenticationException) exception);
+}
+~~~
+
+새로운 유저 정보를 생성 후 url/dashboard 접근합니다.
+디버그에 체크한 exception 걸리게 됩니다.
+
+url/dashboard 는 Authentication 인증이 완료된 사용자만 접근이 가능한 url 입니다.
+그러므로 AccessDeniedException 발생하여 AuthenticationEntryPoint 실행 후 로그인 페이지로 유도합니다.
+
+~~~
+else if (exception instanceof AccessDeniedException) {
+    // 유저의 정보를 확인합니다.
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+~~~
