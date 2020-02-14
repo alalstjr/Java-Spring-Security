@@ -23,6 +23,9 @@
 - [12. AccessDecisionManager](#AccessDecisionManager)
     - [1. accessDecisionManager 설정](#accessDecisionManager-설정)
     - [2. expressionHandler 설정](#expressionHandler-설정)
+- [13. 최종 정리](#최종-정리)
+    - [1. 인증](#인증)
+    - [2. 인증체크](#인증체크)
 
 # Spring Security 적용
 
@@ -1135,3 +1138,52 @@ else if (exception instanceof AccessDeniedException) {
     // 유저의 정보를 확인합니다.
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 ~~~
+
+# 최종 정리
+
+ServletContainer 로 요청이 들어오면 Servlet Filter 목록 중에서 `DelegatingFilterProxy` 가 있습니다.
+DelegatingFilterProxy 가 Spring Boot를 사용하면 자동으로 등록이 되고 (만약 자동등록이 되지않으면 AbstractSecurityWebApplicationInitializer를 사용해서 등록하면 됩니다.)
+DelegatingFilterProxy 는 특정한 `FilterChainProxy Bean 이름(“springSecurityFilterChain”) 으로 Filter 처리를 위임`을 합니다.
+
+`FilterChainProxy 내부에는 Security Filter 목록`을 가지고 있습니다.
+[SecurityContextPersistenceFilter, UsernamePasswordAuthenticationFilter, FilterSecurityInterceptor, ...]
+
+이러한 `Security Filter 목록은 WebSecurity 로 만들어 집니다.`
+WebSecurityConfigurerAdapter 상속받아 구현하는 WebSecurity 를 만들면 FilterChain 을 만드는 겁니다.
+
+~~~
+@Configuration
+public class SecurityConfig extends WebSecurityConfigurerAdapter { ... }
+~~~
+
+이러한 Filter 들을 사용하는 객체들이 존재합니다.
+
+## 인증
+
+인증 관련해서는 AuthenticationManager.interface 를 사용하며 구현체로는 ProviderManager.class 를 많이 사용합니다.
+
+ProviderManager 같은경우에는 다른 AuthenticationProvider 를 사용해서 인증을 처리합니다.
+그중 하나가 DaoAuthenticationProvider 입니다.
+
+DaoAuthenticationProvider 의 역할
+UserDetailsService.interface 를 사용해서 DATA DB 에서 읽어온 User 정보를 사용해서 사용자가 입력한 정보와 같은지 확인 후 인증을 합니다.
+
+인증 정보가 확인이 된다면 SecurityContextHolder 내부에 저장합니다.
+그러면 애플리케이션 전반에서 사용합니다.
+
+- SecurityContextHolder 
+    - SecurityContext
+        - Authentication
+            - Principal
+            - GrantAuthority
+
+## 인증체크
+
+인증체크는 FilterSecurityInterceptor 가 AccessDecisionManager 사용해서 인가처리(인증체크)를 합니다.
+인증체크: SecurityContextHolder 내부에 들어있는 Authentication 정보가 사용자가 접근하려는 리소스에 적절한 ROLE(권한) 을 가지고 있는지 체크합니다.
+
+확인하는 방법은 3개가 존재하지만 기본적으로는 AffirmativeBased 를 기본전략으로 사용합니다.
+
+AffirmativeBased 가 사용하는 Voter 중에서 WebExpressionVoter 하나만 사용하고 있습니다.
+계층형 권한 형태를 커스텀하기 위해서 사용하는 SecurityExpressionHandler
+
