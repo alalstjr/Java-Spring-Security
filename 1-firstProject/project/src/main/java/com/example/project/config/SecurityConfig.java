@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDecisionManager;
 import org.springframework.security.access.AccessDecisionVoter;
@@ -8,6 +9,7 @@ import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.access.vote.AffirmativeBased;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
@@ -83,13 +85,20 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .anyRequest()
                 .authenticated()
                 .expressionHandler(securityExpressionHandler());
-                //.accessDecisionManager(accessDecisionManager());
+        //.accessDecisionManager(accessDecisionManager());
 
         // form 로그인 기능을 사용하겠다.
         http
                 .formLogin()
                 .and()
                 .httpBasic();
+
+        // 특정 페이지 검증 필터 제외 하지만 WebSecurity 사용 권장
+//        http
+//                .authorizeRequests()
+//                .requestMatchers(PathRequest
+//                        .toStaticResources()
+//                        .atCommonLocations());
     }
 
     // 인메모리 유저 생성 방법
@@ -109,4 +118,20 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     //                .password("{noop}123")
     //                .roles("ADMIN");
     //    }
+
+
+    @Override
+    public void configure(WebSecurity web) throws Exception {
+        // 기본 제외 방법
+        web
+                .ignoring()
+                .mvcMatchers("/favicon.ico");
+
+        // Spring 프레임워크 제외방법
+        web
+                .ignoring()
+                .requestMatchers(PathRequest
+                        .toStaticResources()
+                        .atCommonLocations());
+    }
 }

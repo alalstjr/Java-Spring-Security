@@ -1187,3 +1187,63 @@ UserDetailsService.interface 를 사용해서 DATA DB 에서 읽어온 User 정�
 AffirmativeBased 가 사용하는 Voter 중에서 WebExpressionVoter 하나만 사용하고 있습니다.
 계층형 권한 형태를 커스텀하기 위해서 사용하는 SecurityExpressionHandler
 
+# ignoring 필터 제외
+
+지금까지 살펴본 모든 요청은 Spring Security 가 Filter 들을 적용해서 처리를 해왔습니다.
+
+정적이 리소스들을 제외하는 방법
+사용자가 웹페이지에 요청을 할때 크롬 개발자 탭에서 Network 탭에서 넘어가는 정보를 보면
+localhost-200, favion.ico-302, login-200 으로 3개의 전송이 된것을 확인할 수 있습니다.
+이는 불필요한 전송이 2개나 포함되어 있는데 SecurityConfig 내부 설정에서 favion.ico 접근 설정이 없기 때문에 anyRequest().authenticated() 설정으로 빠지므로 
+인증페이지로 연결이 되는것입니다.
+
+~~~
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .authorizeRequests()
+                .mvcMatchers(
+                        "/",
+                        "/info",
+                        "/account/**"
+                )
+                .permitAll();
+
+        http
+                .authorizeRequests()
+                .mvcMatchers("/admin")
+                .hasRole("ADMIN")
+                .mvcMatchers("user")
+                .hasRole("USER");
+
+        http
+                .authorizeRequests()
+                .anyRequest()
+                .authenticated()
+                .expressionHandler(securityExpressionHandler());
+    }
+}
+~~~
+
+어떠한 요청을 Filter 적용을 제외시키는 설정은 WebSecurity 를 사용하면 됩니다.
+
+~~~
+이런 방법의 제외 방법도 있지만 권장하지 않습니다.
+해당 방법으로 제외하면 authorizeRequests 설정으로 등록된 Filter를 전부 적용은 받습니다.
+http
+    .authorizeRequests()
+    .requestMatchers(PathRequest
+        .toStaticResources()
+        .atCommonLocations());
+
+@Override
+public void configure(WebSecurity web) throws Exception {
+    // 기본 제외 방법
+    web.ignoring().mvcMatchers("/favicon.ico");
+
+    // Spring 프레임워크 제외방법
+    // 스프링 부트가 제공하는 PathRequest를 사용해서 정적 자원 요청을 스프링 시큐리티 필터를 적용하지 않도록 설정.
+    web.ignoring().requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+}
+~~~
