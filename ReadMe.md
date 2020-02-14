@@ -16,6 +16,7 @@
 - [6. AuthenticationManager와 Authentication](#AuthenticationManager와-Authentication)
     - [1. AuthenticationManager 인증 과정](#AuthenticationManager-인증-과정)
 - [7. ThreadLocal](#ThreadLocal)
+- [8. Authentication과 SecurityContextHodler](#Authentication과-SecurityContextHodler)
 
 # Spring Security 적용
 
@@ -725,3 +726,43 @@ public class SampleService {
     }
 }
 ~~~
+
+# Authentication과 SecurityContextHodler
+
+AuthenticationManager가 인증을 마친 뒤 리턴 받은 Authentication 객체의 행방은?
+
+- UsernamePasswordAuthenticationFilter
+    - 폼 인증을 처리하는 시큐리티 필터
+    - 인증된 Authentication 객체를 SecurityContextHolder에 넣어주는 필터
+    - SecurityContextHolder.getContext().setAuthentication(authentication)
+
+- SecurityContextPersisenceFilter
+    - SecurityContext를 HTTP session에 캐시(기본 전략)하여 여러 요청에서 Authentication을 공유할 수 있 공유하는 필터.
+    - SecurityContextRepository를 교체하여 세션을 HTTP session이 아닌 다른 곳에 저장하는 것도 가능하다.
+
+dashboard 페이지에 접근하면 로그인 페이지가 출력됩니다.
+user 의 계정으로 로그인을 한 후 새로고침 후 다시 dashboard 페이지에 접근하면 로그인페이지가 나오지않고
+user 가 로그인한 이전 인증이 완료된 Authentication 정보를 체크후 바로 접근가능하게 해줍니다.
+
+~~~
+public void dashboard() {
+    Authentication authentication = SecurityContextHolder
+            .getContext()
+            .getAuthentication();
+
+    System.out.println("====authentication====");
+    System.out.println(authentication);
+}
+
+첫번째 로그인 후 접근시 authentication 정보의 주소 값
+====authentication====
+org.springframework.security.authentication.UsernamePasswordAuthenticationToken@ed00933c:
+
+두번째 새로고침 후 접근시 authentication 정보의 주소 값
+====authentication====
+org.springframework.security.authentication.UsernamePasswordAuthenticationToken@ed00933c:
+~~~
+
+둘의 주소값은 동일합니다.
+
+# 스프링 시큐리티 Filter와 FilterChainProxy

@@ -18,6 +18,9 @@ public class SampleService {
                 .getContext()
                 .getAuthentication();
 
+        System.out.println("====authentication====");
+        System.out.println(authentication);
+
         // 인증이 완료된 사용자의 정보
         Object principal = authentication.getPrincipal();
 
