@@ -20,6 +20,9 @@
 - [9. 스프링 시큐리티 Filter와 FilterChainProxy](#스프링-시큐리티-Filter와-FilterChainProxy)
 - [10. DelegatingFilterProxy와 FilterChainProxy](#DelegatingFilterProxy와-FilterChainProxy)
 - [11. 인증,체인,필터 최종 정리](#인증,체인,필터-최종-정리)
+- [12. AccessDecisionManager](#AccessDecisionManager)
+    - [1. accessDecisionManager 설정](#accessDecisionManager-설정)
+    - [2. expressionHandler 설정](#expressionHandler-설정)
 
 # Spring Security 적용
 
@@ -960,3 +963,128 @@ AuthenticationManager 가 Authentication 의 정보를 가지고 인증을 합�
 이러한 여러가지 Filter 들은 FilterChainProxy 가 호출을 해줍니다.
 
 FilterChainProxy 는 DelegatingFilterProxy 를 통해서 접근을 합니다.
+
+# AccessDecisionManager
+
+이미 인증이 완료된 사용자가 특정한 서버의 리소스에 접근을 할때 유효한 요청인지 판단하는 AccessDecisionManager.interface
+
+- Access Control 결정을 내리는 인터페이스로, `구현체 3가지를 기본으로 제공`한다.
+    - AffirmativeBased: 여러 Voter중에 `한명이라도 허용하면 허용.` 기본 전략.
+    - ConsensusBased: 다수결
+    - UnanimousBased: 만장일치
+
+- AccessDecisionVoter
+    - 해당 Authentication이 특정한 Object에 접근할 때 필요한 ConfigAttributes를 만족하는지 확인한다.
+    - WebExpressionVoter: 웹 시큐리티에서 사용하는 기본 구현체, ROLE_Xxxx가 매치하는지 확인.
+    - RoleHierarchyVoter: 계층형 ROLE 지원. ADMIN > MANAGER > USER
+
+~~~
+AffirmativeBased.class
+
+for (AccessDecisionVoter voter : getDecisionVoters()) {
+        // F7 눌러 해당 클래스로 들어갑니다.
+디버그 > int result = voter.vote(authentication, object, configAttributes);
+        // result 값이 1 이면 허용입니다.
+}
+~~~
+
+디버그 후 실행하면 voter 값이 하나가 존재합니다.
+expressionHandler
+
+~~~
+WebExpressionVoter.class
+
+// weca 값에는 premitAll 값이 들어왔습니다.
+WebExpressionConfigAttribute weca = findConfigAttribute(attributes); 
+
+// expressionHandler 메소드로 지원하는지 여부를 파악 후 return 합니다.
+EvaluationContext ctx = expressionHandler.createEvaluationContext(authentication,
+				fi);
+~~~
+
+~~~
+AffirmativeBased.class
+
+// result = 1 입니다.
+switch (result) {
+case AccessDecisionVoter.ACCESS_GRANTED:
+    return;
+
+case AccessDecisionVoter.ACCESS_DENIED:
+    deny++;
+
+    break;
+~~~
+
+식으로 검증을 합니다.
+
+User.html 페이지가 있습니다.
+해당 페이지의 권한은 USER ROLE 만 접근이 가능합니다.
+ADMIN 권한이 접근하는 경우 Spring Security는 ADMIN 권한이 모든 권한을 가지고 있다고 인식하지 못해서
+User.html 페이지에 접근을 못합니다.
+
+AccessDecisionManager 활용하여 ADMIN 권한을 모든 권한에 접근하도록 설정하겠습니다.
+
+## accessDecisionManager 설정
+
+~~~
+SecurityConfig.class
+
+// AccessDecisionManager
+public AccessDecisionManager accessDecisionManager() {
+    /**
+        * AccessDecisionManager -> AccessDecisionVoter -> webExpressionVoter -> setExpressionHandler -> DefaultWebSecurityExpressionHandler -> roleHierarchy
+        * */
+    // roleHierarchy
+    RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+    roleHierarchy.setHierarchy("ROLE_ADMIN > ROLE_USER ");
+
+    // DefaultWebSecurityExpressionHandler
+    DefaultWebSecurityExpressionHandler handler = new DefaultWebSecurityExpressionHandler();
+    handler.setRoleHierarchy(roleHierarchy);
+
+    // setExpressionHandler
+    // WebExpressionVoter 를 사용하겠습니다.
+    WebExpressionVoter webExpressionVoter = new WebExpressionVoter();
+    webExpressionVoter.setExpressionHandler(handler);
+
+    // AccessDecisionVoter
+    // Voter 목록을 만듭니다.
+    List<AccessDecisionVoter<? extends Object>> voters = Arrays.asList(webExpressionVoter);
+
+    return new AffirmativeBased(voters);
+}
+
+http
+    .authorizeRequests()
+    .anyRequest()
+    .authenticated()
+    // accessDecisionManager 추가하는 위치
+    .accessDecisionManager(accessDecisionManager());
+~~~
+
+## expressionHandler 설정
+
+~~~
+SecurityConfig.class
+
+public SecurityExpressionHandler securityExpressionHandler() {
+    // roleHierarchy
+    RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+    roleHierarchy.setHierarchy("ROLE_ADMIN > ROLE_USER ");
+
+    // DefaultWebSecurityExpressionHandler
+    DefaultWebSecurityExpressionHandler handler = new DefaultWebSecurityExpressionHandler();
+    handler.setRoleHierarchy(roleHierarchy);
+
+    return handler;
+}
+
+http
+    .authorizeRequests()
+    .anyRequest()
+    .authenticated()
+    .expressionHandler(securityExpressionHandler());
+~~~
+
+AccessDecisionManager 자체를 커스텀 한것이 아니라 Voter 가 사용하는 DefaultWebSecurityExpressionHandler 만 커스텀 한것입니다.

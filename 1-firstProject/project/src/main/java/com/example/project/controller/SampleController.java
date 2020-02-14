@@ -85,4 +85,17 @@ public class SampleController {
         );
         return "admin";
     }
+
+    // User 권한만 가진 계정만 접근 가능
+    @GetMapping("/user")
+    public String user(
+            Model model,
+            Principal principal
+    ) {
+        model.addAttribute(
+                "message",
+                "Hello~ user~! :" + principal.getName()
+        );
+        return "user";
+    }
 }

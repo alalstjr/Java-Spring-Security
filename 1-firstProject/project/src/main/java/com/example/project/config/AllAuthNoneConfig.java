@@ -9,7 +9,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 /**
  * account 요청만 인증 없이 접근을 허용하는 Config
  */
-@Configuration
+//@Configuration
 @Order(Ordered.LOWEST_PRECEDENCE - 10) // 실행 우선순위를 하위로 내립니다.
 public class AllAuthNoneConfig extends WebSecurityConfigurerAdapter {
     @Override
