@@ -2,6 +2,7 @@ package com.example.project.service;
 
 import com.example.project.context.AccountContext;
 import com.example.project.domain.Account;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,5 +34,13 @@ public class SampleService {
         // ThreadLocal을 사용하여 메소드 파라미터를 받지 않아도 유저의 정보를 가져와서 사용하였습니다.
         Account account = AccountContext.getAccount();
         System.out.println(account.getUsername());
+    }
+
+    /**
+     * @Async 어노테이션을 붙이면 특정 Bean 안의 메소드를 호출할 때 별도의 Thread 를 만들어서 비동기적으로 호출을 해줍니다.
+     * */
+    @Async
+    public void asyncService() {
+        System.out.println("Async service");
     }
 }

@@ -1247,3 +1247,70 @@ public void configure(WebSecurity web) throws Exception {
     web.ignoring().requestMatchers(PathRequest.toStaticResources().atCommonLocations());
 }
 ~~~
+
+# WebAsyncManagerIntegrationFilter
+
+Filter 중에서 가장 최상위에 있는 Async 웹 MVC를 지원하는 필터 WebAsyncManagerIntegrationFilter
+
+SecurityContext 는 ThreadLocal 로 동작하기 때문에 동일한 Thread 에서만 SecurityContext 가 공유가 됩니다.
+
+하지만 Async 기능 에서는 다른 Thread 를 사용하게 됩니다.
+다른 Thread 이지만 동일한 SecurityContext 를 사용할 수 있도록 지원해주는 WebAsyncManagerIntegrationFilter 입니다.
+
+- 스프링 MVC의 Async 기능(핸들러에서 Callable을 리턴할 수 있는 기능)을 사용할 때에도 SecurityContext를 공유하도록 도와주는 필터.
+    - PreProcess: SecurityContext를 설정한다.
+    - Callable: 비록 다른 쓰레드지만 그 안에서는 동일한 SecurityContext를 참조할 수 있다.
+    - PostProcess: SecurityContext를 정리(clean up)한다.
+
+# @Async
+
+Async Service 호출
+
+~~~
+SampleController.class
+
+@GetMapping("/async-service")
+public String asyncService() {
+    sampleService.asyncService();
+    return "async-service";
+}
+~~~
+
+~~~
+SampleService.class
+
+/**
+* @Async 어노테이션을 붙이면 특정 Bean 안의 메소드를 호출할 때 별도의 Thread 를 만들어서 비동기적으로 호출을 해줍니다.
+* */
+@Async
+public void asyncService() {
+    System.out.println("Async service");
+}
+~~~
+
+~~~
+ProjectApplication.class
+
+@EnableAsync
+public class ProjectApplication { ... }
+~~~
+
+~~~
+SecurityConfig.class
+
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+    /**
+    * 기본적으로 사하는 SecurityContextHolder는 getContextHolderStrategy 설정 가능합니다.
+    * SecurityContext 정보를 어떻게 유지할 것인가 어디까지 공유할 것인가 를 설정가능합니다.
+    * 기본은 ThreadLocal 입니다.
+    *
+    * SecurityContextHolder.MODE_INHERITABLETHREADLOCAL 를 사용하면 현재
+    * Thread 에서 하위 Thread 생성하는 Thread 에도 SecurityContextHolder가 공유가 됩니다.
+    *
+    * */
+    SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+}
+~~~
+
+[참고](https://docs.oracle.com/javase/7/docs/api/java/lang/InheritableThreadLocal.html)

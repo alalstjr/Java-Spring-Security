@@ -98,4 +98,10 @@ public class SampleController {
         );
         return "user";
     }
+
+    @GetMapping("/async-service")
+    public String asyncService() {
+        sampleService.asyncService();
+        return "async-service";
+    }
 }

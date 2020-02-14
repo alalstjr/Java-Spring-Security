@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
 
@@ -94,11 +95,22 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .httpBasic();
 
         // 특정 페이지 검증 필터 제외 하지만 WebSecurity 사용 권장
-//        http
-//                .authorizeRequests()
-//                .requestMatchers(PathRequest
-//                        .toStaticResources()
-//                        .atCommonLocations());
+        //        http
+        //                .authorizeRequests()
+        //                .requestMatchers(PathRequest
+        //                        .toStaticResources()
+        //                        .atCommonLocations());
+
+        /**
+         * 기본적으로 사하는 SecurityContextHolder는 getContextHolderStrategy 설정 가능합니다.
+         * SecurityContext 정보를 어떻게 유지할 것인가 어디까지 공유할 것인가 를 설정가능합니다.
+         * 기본은 ThreadLocal 입니다.
+         *
+         * SecurityContextHolder.MODE_INHERITABLETHREADLOCAL 를 사용하면 현재
+         * Thread 에서 하위 Thread 생성하는 Thread 에도 SecurityContextHolder가 공유가 됩니다.
+         *
+         * */
+        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
     }
 
     // 인메모리 유저 생성 방법
