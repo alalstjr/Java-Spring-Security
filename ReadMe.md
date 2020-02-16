@@ -1314,3 +1314,199 @@ protected void configure(HttpSecurity http) throws Exception {
 ~~~
 
 [참고](https://docs.oracle.com/javase/7/docs/api/java/lang/InheritableThreadLocal.html)
+
+# SecurityContextPersistenceFilter
+
+요청간의 SecurityContext를 공유할 수 있는 기능을 제공합니다.
+예를들어 로그인을 한 후 인증이 필요한 페이지에 접근하면 접근이 됩니다.
+다음 새로고침 후 접근하면 SecurityContext 간의 정보가 공유가 되기 때문에 인증 필요없이 접근합니다.
+
+- SecurityContextRepository를 사용해서 기존의 SecurityContext를 읽어오거나 초기화 한다.
+    - 기본으로 사용하는 전략은 HTTP Session을 사용한다.
+    - Spring-Session과 연동하여 세션 클러스터를 구현할 수 있다.
+
+SecurityContextRepository.interface 의 기본 구현체는 HttpSessionSecurityContextRepository.class 입니다.
+
+커스텀한 인증 필터를 만드는 경우에는 SecurityContextPersistenceFilter 뒤쪽에 등록을 해줘야 합니다.
+
+# HeaderWriterFilter
+
+- 응답 헤더에 시큐리티 관련 헤더를 추가해주는 필터
+    - XContentTypeOptionsHeaderWriter: 마임 타입 스니핑 방어.
+    - XXssProtectionHeaderWriter: 브라우저에 내장된 XSS 필터 적용.
+    - CacheControlHeadersWriter: 캐시 히스토리 취약점 방어. (민감한 정보가 캐시로 남지 않도록 삭제합니다.)
+    - HstsHeaderWriter: HTTPS로만 소통하도록 강제.
+    - XFrameOptionsHeaderWriter: clickjacking 방어. (다른 사이트로 연결되는 링크가 웹에 못들어오도록 막습니다.)
+
+~~~
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Content-Language: en-US
+Content-Type: text/html;charset=UTF-8
+Date: Sun, 04 Aug 2019 16:25:10 GMT
+Expires: 0
+Pragma: no-cache
+Transfer-Encoding: chunked
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+~~~
+
+- X-Content-Type-Options:
+    - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options
+- Cache-Control:
+    - https://www.owasp.org/index.php/Testing_for_Browser_cache_weakness_(OTG-AUTHN-006)
+- X-XSS-Protection
+    - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection
+    - https://github.com/naver/lucy-xss-filter
+- HSTS
+    - https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html
+- X-Frame-Options
+    - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
+    - https://cyberx.tistory.com/171
+
+# CSRF 어택 방지 필터: CsrfFilter
+
+원치않는 요청을 임의대로 만들어서 보내는것 
+
+나의 브라우저 -> 은행에 로그인 -> 유튜브(나쁜사이트)로 접근하면 아무런 이상없는 홈페이지 같지만 해당 홈페이지는 악의적인 코드가 심어져 있습니다. 평범한 Form 처럼 보이지만 실제로는 은행으로 요청을 보내는 Form 입니다.
+
+- CSRF 토큰 인증으로 접근하는경우
+    - 나의 브라우저 -> 은행에 로그인 -> 은행으로 요청을 보내는 나쁜사이트가 접근합니다. 하지만 나쁜 사이트는 CSRF 토큰이 존재하지 않으므로 접근을 막습니다.
+
+- CSRF 어택 방지 필터
+    - 인증된 유저의 계정을 사용해 악의적인 변경 요청을 만들어 보내는 기법.
+    - https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)
+    - https://namu.wiki/w/CSRF
+    - CORS를 사용할 때 특히 주의 해야 함.
+        - 타 도메인에서 보내오는 요청을 허용하기 때문에...
+        - https://en.wikipedia.org/wiki/Cross-origin_resource_sharing
+
+- 의도한 사용자만 리소스를 변경할 수 있도록 허용하는 필터
+    - CSRF 토큰을 사용하여 방지.
+
+~~~
+CsrfFilter.class
+
+CSRF 토큰을 생성 후 보냅니다.
+request.setAttribute(CsrfToken.class.getName(), csrfToken);
+request.setAttribute(csrfToken.getParameterName(), csrfToken);
+...
+
+CSRF 토큰값을 받아옵니다.
+String actualToken = request.getHeader(csrfToken.getHeaderName());
+if (actualToken == null) {
+    actualToken = request.getParameter(csrfToken.getParameterName());
+}
+
+CSRF 토큰값이 일치하는지 확인합니다.
+if (!csrfToken.getToken().equals(actualToken)) {
+    ...
+}
+~~~
+
+# CSRF 토큰 사용 예제
+
+~~~
+SingUpController.class
+
+@Controller
+@RequestMapping("/signup")
+public class SingUpController {
+
+    private final AccountService accountService;
+
+    public SingUpController(AccountService accountService) {
+        this.accountService = accountService;
+    }
+
+    @GetMapping("")
+    public String signupForm(Model model) {
+        model.addAttribute("account", new Account());
+        return "signup";
+    }
+
+    @PostMapping("")
+    public String processSingUp(@ModelAttribute Account account) {
+        account.setRole("USER");
+        accountService.save(account);
+
+        return "redirect:/";
+    }
+}
+
+~~~
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Signup</title>
+</head>
+<body>
+    <!--  thymeleaf, JSP 를 사용하면 자동으로 CSRF 값을 자동으로 넣어줍니다. -->
+    <form
+            action="/signup"
+            th:action="@{/signup}"
+            th:object="${account}"
+            method="post"
+    >
+        <p>Username: <input type="text" th:field="*{username}"></p>
+        <p>Password: <input type="text" th:field="*{password}"></p>
+        <p><button type="submit">SingUp</button></p>
+    </form>
+</body>
+</html>
+~~~
+
+~~~
+SecurityConfig.class
+
+http
+        .authorizeRequests()
+        .mvcMatchers(
+                "/signup/**"
+        )
+        .permitAll();
+~~~
+
+CSRF 값을 생성하여 CSRF 토큰이 전달되야 회원가입이 됩니다.
+
+## CSRF Test Code
+
+~~~
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SingUpControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Test
+    public void signUpForm() throws Exception {
+        mockMvc
+                .perform(get("/signup"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("_csrf")))
+                .andDo(print());
+    }
+
+    @Test
+    void processSingUp() throws Exception {
+        mockMvc
+                .perform(post("/signup")
+                        .param(
+                                "username",
+                                "jjunpro"
+                        )
+                        .param(
+                                "password",
+                                "123"
+                        )
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andDo(print());
+    }
+}
+~~~
