@@ -89,12 +89,6 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .expressionHandler(securityExpressionHandler());
         //.accessDecisionManager(accessDecisionManager());
 
-        // form 로그인 기능을 사용하겠다.
-        http
-                .formLogin()
-                .and()
-                .httpBasic();
-
         // 특정 페이지 검증 필터 제외 하지만 WebSecurity 사용 권장
         //        http
         //                .authorizeRequests()
@@ -111,9 +105,28 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
          * Thread 에서 하위 Thread 생성하는 Thread 에도 SecurityContextHolder가 공유가 됩니다.
          *
          * */
-        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+        //SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
 
-        http.logout().logoutUrl("/logout").logoutSuccessUrl("/");
+        //        http
+        //                .logout()
+        //                .logoutUrl("/logout")
+        //                .logoutSuccessUrl("/");
+
+        /* http
+                .formLogin()
+                .usernameParameter("my-username")
+                .passwordParameter("my-password");*/
+
+        // form 로그인 기능을 사용하겠다.
+      /*  http
+                .formLogin()
+                .and()
+                .httpBasic();*/
+
+        http
+                .formLogin()
+                .loginPage("/signin")
+                .permitAll();
     }
 
     // 인메모리 유저 생성 방법

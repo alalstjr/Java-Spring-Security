@@ -35,6 +35,9 @@
 - [20. CSRF 토큰 사용 예제](#CSRF-토큰-사용-예제)
      - [1. CSRF Test Code](#CSRF-Test-Code)
 - [21. LogoutFilter](#LogoutFilter)
+- [22. 폼 인증 처리 필터 UsernamePasswordAuthenticationFilter](#폼-인증-처리-필터-UsernamePasswordAuthenticationFilter)
+- [23. 로그인/로그아웃 폼 페이지 생성해주는 필터 DefaultLogin/LogoutPageGeneratingFilter](#로그인/로그아웃-폼-페이지-생성해주는-필터-DefaultLogin/LogoutPageGeneratingFilter)
+- [24. 로그인/로그아웃 폼 커스터마이징](#로그인/로그아웃-폼-커스터마이징)
 
 # Spring Security 적용
 
@@ -1568,4 +1571,111 @@ http.logout()
         .deleteCookies()
         .addLogoutHandler()
         .logoutSuccessHandler();
+~~~
+
+# 폼 인증 처리 필터 UsernamePasswordAuthenticationFilter
+
+실제로 인증을 처리하는 곳
+인증정보를 폼 로그인에서 서버로 보내면 UsernamePasswordAuthenticationFilter 가 AuthenticationManager 에게 인증작업을 하도록 일을 시킵니다.
+
+- `폼 로그인을 처리하는 인증 필터`
+    - 사용자가 폼에 입력한 username과 password로 Authentcation을 만들고 AuthenticationManager를 사용하여 인증을 시도한다.
+    - AuthenticationManager (ProviderManager)는 여러 AuthenticationProvider를 사용하여 인증을 시도하는데, 그 중에 DaoAuthenticationProvider는 UserDetailsServivce를 사용하여 UserDetails 정보를 가져와 사용자가 입력한 password와 비교한다.
+
+# 로그인/로그아웃 폼 페이지 생성해주는 필터 DefaultLogin/LogoutPageGeneratingFilter
+
+- 기본 로그인 폼 페이지를 생성해주는 필터
+    - GET /login 요청을 처리하는 필터.
+
+~~~
+http
+    .formLogin()
+    .usernameParameter("my-username")
+    .passwordParameter("my-password");
+~~~
+
+form login 필요한 파라미터 값을 변경할 수 있습니다.
+
+~~~
+http
+    .formLogin()
+    .loginPage("signin");
+~~~
+
+커스텀한 로그인페이지 설정 방법입니다.
+
+FilterChainProxy 의 필터 목록을 확인하면 
+커스텀한 로그인 로그아웃 페이지를 사용한다고 명시하면 로그인, 로그아웃 필터를 제공하지 않습니다.
+
+# 로그인/로그아웃 폼 커스터마이징
+
+~~~
+SecurityConfig.class
+
+http
+    .formLogin()
+    .loginPage("/signin")
+    .permitAll();
+~~~
+
+~~~
+LogInOutController.class
+
+@Controller
+public class LogInOutController {
+
+    @GetMapping("/signin")
+    public String loginForm() {
+        return "signin";
+    }
+
+    @GetMapping("/logout")
+    public String logoutForm() {
+        return "logout";
+    }
+}
+~~~
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Signin</title>
+</head>
+<body>
+    <!--  thymeleaf, JSP 를 사용하면 자동으로 CSRF 값을 자동으로 넣어줍니다. -->
+    <div th:if="${param.error}">
+        login error!!
+    </div>
+    <form
+            action="/signin"
+            th:action="@{/signin}"
+            method="post"
+    >
+        <p>Username: <input type="text" name="username"></p>
+        <p>Password: <input type="text" name="password"></p>
+        <p><button type="submit">SignIn</button></p>
+    </form>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Logout</title>
+</head>
+<body>
+<form
+        action="/logout"
+        th:action="@{/logout}"
+        method="post"
+>
+    <p>
+        <button type="submit">Logout</button>
+    </p>
+</form>
+</body>
+</html>
 ~~~
