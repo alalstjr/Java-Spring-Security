@@ -43,6 +43,9 @@
 - [27. 시큐리티 관련 서블릿 스팩 구현 필터 SecurityContextHolderAwareRequestFilter](#시큐리티-관련-서블릿-스팩-구현-필터SecurityContextHolderAwareRequestFilter)
 - [28. 익명 인증 필터 AnonymousAuthenticationFilter](#익명-인증-필터-AnonymousAuthenticationFilter)
 - [29. 세션 관리 필터 SessionManagementFilter](#세션-관리-필터-SessionManagementFilter)
+- [30. 인증/인가 예외 처리 필터 ExceptionTranslationFilter](#인증/인가-예외-처리-필터-ExceptionTranslationFilter)
+- [31. 인가 처리 필터 FilterSecurityInterceptor](#인가-처리-필터-FilterSecurityInterceptor)
+- [32. 토큰 기반 인증 필터 RememberMeAuthenticationFilter](#토큰-기반-인증-필터-RememberMeAuthenticationFilter)
 
 # Spring Security 적용
 
@@ -1853,4 +1856,93 @@ http
             response.sendRedirect("/access-denied");
         }
     });
+~~~
+
+# 인가 처리 필터 FilterSecurityInterceptor
+
+https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#filter-security-interceptor
+
+HTTP 리소스 시큐리티 처리를 담당하는 필터. AccessDecisionManager를 사용하여 인가를 처리한다.
+
+HTTP 리로스 시큐리티 설정
+
+~~~
+http.authorizeRequests()
+    .mvcMatchers("/", "/info", "/account/**", "/signup").permitAll()
+    .mvcMatchers("/admin").hasAuthority("ROLE_ADMIN")
+    .mvcMatchers("/user").hasRole("USER")
+    .anyRequest().authenticated()
+    .expressionHandler(expressionHandler());
+~~~
+
+특정한 리소스에 접근하는데 필요한 권한이 있는지 확인을 한 후 인가처리를 합니다.
+
+anyRequest() 메소드 내부에는 여러가지 기능이 포함되어있습니다.
+
+# 토큰 기반 인증 필터 RememberMeAuthenticationFilter
+
+로그인 기억하기와 같은 체크박스에 체크를 하면 사용자가 명시적으로 로그아웃을 하기 전까지는 로그인이 유지가 됩니다.
+Session 지워지거나 만료가 되어도 상관없이 유지됩니다.
+
+~~~
+http
+    .rememberMe()
+    .userDetailsService(accountService)
+    .key("remember-me-sample");
+
+    // 토큰 유지값도 설정 가능하며 기본값은 2주 입니다.
+    .tokenValiditySeconds()
+    // https 접근시 필요한 쿠키값 설정은 true 해야 좋습니다.
+    .useSecureCookie(true)
+    // 사용자가 체크를 안해도 기본적으로 사용하는지 설정합니다.
+    .alwaysRemember(true)
+~~~
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Signin</title>
+</head>
+<body>
+    <!--  thymeleaf, JSP 를 사용하면 자동으로 CSRF 값을 자동으로 넣어줍니다. -->
+    <div th:if="${param.error}">
+        login error!!
+    </div>
+    <form
+            action="/signin"
+            th:action="@{/signin}"
+            method="post"
+    >
+        <p>Username: <input type="text" name="username"></p>
+        <p>Password: <input type="text" name="password"></p>
+        <p>Remember: <input type="checkbox" name="remember-me"></p>
+        <p><button type="submit">SignIn</button></p>
+    </form>
+</body>
+</html>
+~~~
+
+remember-me 적용하여 로그인하면 Cookie 값이 2개가 저장이 됩니다.
+Session Id 값과 remember-me Cookie 값이 생성됩니다.
+
+여기서 Session Id 값만 삭제하고 다시 새로고침하여 접근하면 Session Id 값이 다시 생성되어 저장됩니다.
+
+~~~
+RememberMeAuthenticationFilter.class
+
+인증된 사용자가 존재하는지 확인합니다.
+지금은 Session Id 값을 삭제해서 SecurityContextHolder 내부에 아무값도 존재하지 않습니다.
+
+if (SecurityContextHolder.getContext().getAuthentication() == null) {
+    Authentication rememberMeAuth = rememberMeServices.autoLogin(request,
+            response);
+        
+    rememberMeAuth 토큰이 존재하는 상태이므로 코드 실행
+    if (rememberMeAuth != null) {
+        rememberMeAuth 토큰을 활용하여 인증을 시도합니다. 
+    }
+}
+
 ~~~

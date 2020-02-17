@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.service.AccountService;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDecisionManager;
@@ -31,6 +32,12 @@ import java.util.List;
 @Configuration
 // @EnableWebSecurity Spring Boot 에서 자동 등록을 해주므로 생략 가능
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private final AccountService accountService;
+
+    public SecurityConfig(AccountService accountService) {
+        this.accountService = accountService;
+    }
 
     // AccessDecisionManager
     public AccessDecisionManager accessDecisionManager() {
@@ -187,6 +194,14 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                         response.sendRedirect("/access-denied");
                     }
                 });
+
+        http
+                .rememberMe()
+                .userDetailsService(accountService)
+                //                .tokenValiditySeconds()
+                //                .useSecureCookie(true)
+                //                .alwaysRemember(true)
+                .key("remember-me-sample");
     }
 
     // 인메모리 유저 생성 방법
