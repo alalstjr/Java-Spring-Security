@@ -38,6 +38,11 @@
 - [22. 폼 인증 처리 필터 UsernamePasswordAuthenticationFilter](#폼-인증-처리-필터-UsernamePasswordAuthenticationFilter)
 - [23. 로그인/로그아웃 폼 페이지 생성해주는 필터 DefaultLogin/LogoutPageGeneratingFilter](#로그인/로그아웃-폼-페이지-생성해주는-필터-DefaultLogin/LogoutPageGeneratingFilter)
 - [24. 로그인/로그아웃 폼 커스터마이징](#로그인/로그아웃-폼-커스터마이징)
+- [25. Basic 인증 처리 필터 BasicAuthenticationFilter](#Basic-인증-처리-필터-BasicAuthenticationFilter)
+- [26. 요청 캐시 필터 RequestCacheAwareFilter](#요청-캐시-필터-RequestCacheAwareFilter)
+- [27. 시큐리티 관련 서블릿 스팩 구현 필터 SecurityContextHolderAwareRequestFilter](#시큐리티-관련-서블릿-스팩-구현-필터SecurityContextHolderAwareRequestFilter)
+- [28. 익명 인증 필터 AnonymousAuthenticationFilter](#익명-인증-필터-AnonymousAuthenticationFilter)
+- [29. 세션 관리 필터 SessionManagementFilter](#세션-관리-필터-SessionManagementFilter)
 
 # Spring Security 적용
 
@@ -1678,4 +1683,120 @@ public class LogInOutController {
 </form>
 </body>
 </html>
+~~~
+
+# Basic 인증 처리 필터 BasicAuthenticationFilter
+
+- Basic 인증이란?
+    - https://tools.ietf.org/html/rfc7617
+    - 요청 헤더에 username와 password를 실어 보내면 브라우저 또는 서버가 그 값을 읽어서 인증하는 방식. 예) Authorization: Basic QWxhZGRpbjpPcGVuU2VzYW1l (keesun:123 을 BASE 64)
+    - 보통, 브라우저 기반 요청이 클라이언트의 요청을 처리할 때 자주 사용.
+    - 보안에 취약하기 때문에 반드시 HTTPS를 사용할 것을 권장.
+
+curl -u username:password http://localhost:8080
+
+# 요청 캐시 필터 RequestCacheAwareFilter
+
+사용자가 "/dashboard" 링크로 접속을 합니다.
+하지만 권한이 필요한 유저만 접근이 가능하므로 "/login" 페이지로 이동됩니다.
+로그인 한 후 이동되는 페이지가 사용자가 접근하려고 했던 캐시에 들어있는 페이지 "/dashboard" 확인 후 이동됩니다.
+
+- 현재 요청과 관련 있는 캐시된 요청이 있는지 찾아서 적용하는 필터.
+    - 캐시된 요청이 없다면, 현재 요청 처리
+    - 캐시된 요청이 있다면, 해당 캐시된 요청 처리
+
+# 시큐리티 관련 서블릿 스팩 구현 필터 SecurityContextHolderAwareRequestFilter
+
+- 시큐리티 관련 서블릿 API를 구현해주는 필터
+    - HttpServletRequest#authenticate(HttpServletResponse)
+    - HttpServletRequest#login(String, String)
+    - HttpServletRequest#logout()
+    - AsyncContext#start(Runnable)
+
+# 익명 인증 필터 AnonymousAuthenticationFilter
+
+https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#anonymous
+
+현재 SecurityContext에 Authentication이 null이면 “익명 Authentication”을 만들어 넣어주고, null이 아니면 아무일도 하지 않는다.
+
+인증이 안된 사용자를 익명 사용자를 만들어서 인증 정보를 SecurityContext 내부에 넣어줍니다.
+
+~~~
+http
+    .anonymous()
+    .principal("anonymous");
+~~~
+
+기본값을 커스텀 마이징해서 변경할 수도 있습니다.
+
+https://en.wikipedia.org/wiki/Null_object_pattern
+
+# 세션 관리 필터 SessionManagementFilter
+
+https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#session-mgmt
+
+- 세션 변조 방지 전략 설정: sessionFixation
+    - 세션 변조: https://www.owasp.org/index.php/Session_fixation
+    - none
+    - newSession
+    - migrateSession (서블릿 3.0- 컨테이너 사용시 기본값)
+    - changeSessionId (서브릿 3.1+ 컨테이너 사용시 기본값)
+    - https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#nsa-session-management-attributes
+
+공격자가 어떠한 웹사이트의 로그인해서 자신의 session id Cookie 로 값을 받아옵니다.
+Cookie 값을 공격하려는 사람에게 보냅니다.
+공격받은 사람이 Cookie 값을 가지고 웹사이트에 접근합니다.
+웹사이트에서는 같은 Cookie 를 가지고있는 공격자와 공격받는 사람을 동일하게 봅니다.
+그러면 공격하는 사람이 유저정보를 확인하면 공격받는 사람의 개인정보가 유출이 됩니다.
+
+간단하게 방지하는 방법은 인증을 시도할 때 session id 를 새로 만들어 주는것입니다.
+
+Spring Boot 4 버전 이후부터의 Tomcat 버전은 9 버전 이므로 changeSessionId 을 사용하게 됩니다.
+changeSessionId 사용하면 migrateSession 보다 좋은점은 새로운 Session을 만드는 것이 아니라 Id 만 변경하므로 조금더 빠르게 동작합니다.
+
+- 유효하지 않은 세션을 리다이렉트 시킬 URL 설정
+    - invalidSessionUrl
+
+로그아웃 했을 때 기존의 Session 은 invalidate 시킵니다. 더이상 유효하지 않는 Session 으로 취급합니다.
+그 경우 어디로 보내야 하는지 설정할 수 있습니다.
+
+~~~
+http
+    .sessionManagement()
+    .invalidSessionUrl("/login");
+
+// sessionFixation 설정이 되어있는 경우
+http
+    .sessionManagement()
+    .sessionFixation()
+    .changeSessionId()
+    .invalidSessionUrl("/login");
+~~~
+
+- 동시성 제어: maximumSessions
+    - 추가 로그인을 막을지 여부 설정 (기본값, false)
+    - https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#nsa-concurrency-control
+
+~~~
+/**
+* expiredUrl 이전 로그인한 Session 값이 만료되 되면 이동되는 페이지 설정
+* maxSessionsPreventsLogin(true) 새로운 Session 의 로그인을 못하게 막을 수 있는 설정
+* */
+http
+    .sessionManagement()
+    .maximumSessions(1)
+    .maxSessionsPreventsLogin(true)
+    .expiredUrl("/login");
+~~~
+
+- 세션 생성 전략: sessionCreationPolicy
+    - IF_REQUIRED (필요할 때 만듭니다.)
+    - NEVER
+    - STATELESS (Session 을 사용하지 않습니다.)
+    - ALWAYS=
+
+~~~
+http
+    .sessionManagement()
+    .sessionCreationPolicy(SessionCreationPolicy.NEVER);
 ~~~

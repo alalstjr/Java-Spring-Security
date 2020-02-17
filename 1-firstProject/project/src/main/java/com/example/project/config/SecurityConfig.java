@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
@@ -127,6 +128,34 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .formLogin()
                 .loginPage("/signin")
                 .permitAll();
+
+        http
+                .anonymous()
+                .principal("anonymous");
+
+        http
+                .sessionManagement()
+                .invalidSessionUrl("/login");
+
+        http
+                .sessionManagement()
+                .sessionFixation()
+                .changeSessionId()
+                .invalidSessionUrl("/login");
+
+        /**
+         * expiredUrl 이전 로그인한 Session 값이 만료되 되면 이동되는 페이지 설정
+         * maxSessionsPreventsLogin(true) 새로운 Session 의 로그인을 못하게 막을 수 있는 설정
+         * */
+        http
+                .sessionManagement()
+                .maximumSessions(1)
+                .maxSessionsPreventsLogin(true)
+                .expiredUrl("/login");
+
+        http
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.NEVER);
     }
 
     // 인메모리 유저 생성 방법
