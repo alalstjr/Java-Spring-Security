@@ -1800,3 +1800,57 @@ http
     .sessionManagement()
     .sessionCreationPolicy(SessionCreationPolicy.NEVER);
 ~~~
+
+# 인증/인가 예외 처리 필터 ExceptionTranslationFilter
+
+ExceptionTranslationFilter 다음 작동하는 필터는 FilterSecurityInterceptor 입니다.
+
+ExceptionTranslationFilter 가 FilterSecurityInterceptor 를 감싸고 실행이 되야합니다.
+
+FilterSecurityInterceptor (AccessDecisionManager, AffirmativeBased)
+AffirmativeBased 구현체를 사용해서 인가 처리를 하는데 즉 권한이 필요한 리소스에 접근할 때 현재 Authentication 값이 접근할 수 있는지 판단하는데 두가지 에러가 발생할 수도 있습니다.
+
+1. AuthenticationException 인증이 자체가 되어있지 않다면 에러발생
+
+AuthenticationException -> AuthenticationEntryPoint 
+해당 유저를 로그인 할 수 있도록 로그인 페이지로 이동시킵니다.
+로그인 하지않고 "/dashboard" 접근하면 로그인 페이지로 이동시키는 예제입니다.
+
+2. AccessDeniendException 해당 리소스접근에 필요한 권한이 부족하면 에러발생
+
+AccessDeniendException -> AccessDeniedHandler 
+유저로 로그인 후 ADMIN 권한의 페이지로 접그하면 403 에러를 발생시킵니다.
+
+~~~
+http
+    .exceptionHandling()
+    .accessDeniedPage("/access-page");
+~~~
+
+exceptionHandling 설정으로 커스텀한 accessDeniedPage 연결 하여 출력할 수 있습니다.
+
+서버단에 Log 를 남기거나 특정한 View 로도 이동시키고 싶다면
+
+~~~
+http
+    .exceptionHandling()
+    .accessDeniedHandler(new AccessDeniedHandler() {
+        @Override
+        public void handle(
+                HttpServletRequest request,
+                HttpServletResponse response,
+                AccessDeniedException accessDeniedException
+        ) throws IOException, ServletException {
+            UserDetails principal = (UserDetails) SecurityContextHolder
+                    .getContext()
+                    .getAuthentication()
+                    .getPrincipal();
+            String username = principal.getUsername();
+
+            // Log 남기고
+            System.out.println(username + "잘못된 접근" + "request.getRequestURI());
+            // 링크이동까지
+            response.sendRedirect("/access-denied");
+        }
+    });
+~~~
