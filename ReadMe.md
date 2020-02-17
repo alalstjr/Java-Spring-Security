@@ -26,6 +26,15 @@
 - [13. 최종 정리](#최종-정리)
     - [1. 인증](#인증)
     - [2. 인증체크](#인증체크)
+- [14. ignoring 필터 제외](#ignoring-필터-제외)
+- [15. WebAsyncManagerIntegrationFilter](#WebAsyncManagerIntegrationFilter)
+- [16. @Async](#@Async)
+- [17. SecurityContextPersistenceFilter](#SecurityContextPersistenceFilter)
+- [18. HeaderWriterFilter](#HeaderWriterFilter)
+- [19. CSRF 어택 방지 필터 CsrfFilter](#CSRF-어택-방지-필터-CsrfFilter)
+- [20. CSRF 토큰 사용 예제](#CSRF-토큰-사용-예제)
+     - [1. CSRF Test Code](#CSRF-Test-Code)
+- [21. LogoutFilter](#LogoutFilter)
 
 # Spring Security 적용
 
@@ -1364,7 +1373,7 @@ X-XSS-Protection: 1; mode=block
     - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
     - https://cyberx.tistory.com/171
 
-# CSRF 어택 방지 필터: CsrfFilter
+# CSRF 어택 방지 필터 CsrfFilter
 
 원치않는 요청을 임의대로 만들어서 보내는것 
 
@@ -1509,4 +1518,54 @@ public class SingUpControllerTest {
                 .andDo(print());
     }
 }
+~~~
+
+# LogoutFilter
+
+여러 LogoutHandler를 사용하여 로그아웃시 필요한 처리를 하며 이후에는 LogoutSuccessHandler를 사용하여 로그아웃 후처리를 한다.
+
+- LogoutHandler
+    - CsrfLogoutHandler
+    - SecurityContextLogoutHandler
+
+- LogoutSuccessHandler
+    - SimplUrlLogoutSuccessHandler
+
+
+~~~
+LogoutFilter.class
+
+private final LogoutHandler handler;
+private final LogoutSuccessHandler logoutSuccessHandler;
+~~~
+
+~~~
+LogoutFilter.class
+
+public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+        throws IOException, ServletException {
+    디버그 > HttpServletRequest request = (HttpServletRequest) req;
+    HttpServletResponse response = (HttpServletResponse) res;
+
+    if (requiresLogout(request, response)) {
+    디버그 > Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        ...
+    }
+    ...
+}
+~~~
+
+디버그 실행 후 로그아웃을 실행하면 requiresLogout 조건에 맞아서 실행되게 되는것을 확인할 수 있습니다.
+
+로그아웃 이후 "/" 페이지로 이동되도록 설정해보도록 하겠습니다.
+
+~~~
+http.logout()
+        .logoutUrl("/logout")
+        .logoutSuccessUrl("/")
+        .logoutRequestMatcher()
+        .invalidateHttpSession(true)
+        .deleteCookies()
+        .addLogoutHandler()
+        .logoutSuccessHandler();
 ~~~

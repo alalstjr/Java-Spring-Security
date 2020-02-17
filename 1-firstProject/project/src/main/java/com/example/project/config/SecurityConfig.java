@@ -112,6 +112,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
          *
          * */
         SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+
+        http.logout().logoutUrl("/logout").logoutSuccessUrl("/");
     }
 
     // 인메모리 유저 생성 방법
