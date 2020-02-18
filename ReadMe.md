@@ -47,6 +47,13 @@
 - [31. 인가 처리 필터 FilterSecurityInterceptor](#인가-처리-필터-FilterSecurityInterceptor)
 - [32. 토큰 기반 인증 필터 RememberMeAuthenticationFilter](#토큰-기반-인증-필터-RememberMeAuthenticationFilter)
 - [33. 커스텀 필터 추가하기](#커스텀-필터-추가하기)
+- [34. 타임리프 스프링 시큐리티 확장팩](#타임리프-스프링-시큐리티-확장팩)
+    - [1. sec 네임스페이스](#sec-네임스페이스)
+- [35. 메소드 시큐리티](#메소드-시큐리티)
+- [36. @AuthenticationPrincipal](#@AuthenticationPrincipal)
+     - [1. 바로 참조하는 방법](바로-참조하는-방법)
+     - [2. 어노테이션으로 정의하기](#어노테이션으로-정의하기)
+- [37. 스프링 데이터 연동](#스프링-데이터-연동)
 
 # Spring Security 적용
 
@@ -1985,4 +1992,271 @@ http.addFilterBefore(
         new LoggingFilter(),
         WebAsyncManagerIntegrationFilter.class
 );
+~~~
+
+# 타임리프 스프링 시큐리티 확장팩
+
+의존성 추가
+
+~~~
+compile group: 'org.thymeleaf.extras', name: 'thymeleaf-extras-springsecurity5', version: '3.0.4.RELEASE'
+~~~
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <h1 th:text="${message}">hello~!</h1>
+    <div th:if="${#authentication.expr('isAuthenticated()')}">
+        <h2 th:text="${#authentication.name}">Name</h2>
+        <a href="/logout" th:href="@{/logout}">Logout</a>
+    </div>
+    <div th:unless="${#authentication.expr('isAuthenticated()')}">
+        <a href="/login" th:href="@{/login}">Login</a>
+    </div>
+</body>
+</html>
+~~~
+
+## sec 네임스페이스
+
+~~~
+Sec 네임스페이스 등록
+xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+
+Sec 네임스페이스 사용하기
+<div sec:authorize="isAuthenticated()">
+    <h2 sec:authentication="name">Name</h2>
+    <a href="/logout" th:href="@{/logout}">Logout</a>
+</div>
+<div sec:authorize="!isAuthenticated()">
+    <a href="/login" th:href="@{/login}">Login</a>
+</div>
+~~~
+
+# 메소드 시큐리티
+
+서비스 계층을 직접 호출할 때 사용합니다.
+
+https://docs.spring.io/spring-security/site/docs/5.1.5.RELEASE/reference/htmlsingle/#jc-method
+https://www.baeldung.com/spring-security-method-security
+
+- @Secured와 @RollAllowed
+    - 메소드 호출 이전에 권한을 확인한다.
+    - 스프링 EL을 사용하지 못한다.
+
+- @PreAuthorize와 @PostAuthorize
+    - 메소드 호출 이전 @있다.
+
+# @AuthenticationPrincipal
+
+~~~
+@GetMapping("/admin")
+public String admin(
+        Model model,
+        Principal principal
+) {
+    model.addAttribute(
+            "message",
+            "Hello~ admin~! :" + principal.getName()
+    );
+    return "admin";
+}
+~~~
+
+기존의 인증된 유저 정보를 불러오려면 Principal principal 파라미터로 값을 불러왔습니다.
+하지만 불러오는 값은 제한적이였습니다.
+이를 Domain 을 연결하여 값을 직접 가지고 오도록 하겠습니다.
+
+~~~
+UserAccount.class
+
+public class UserAccount extends User {
+
+    private Account account;
+
+    public UserAccount(
+            Account account
+    ) {
+        super(
+                account.getUsername(),
+                account.getPassword(),
+                List.of(new SimpleGrantedAuthority("ROLE_" + account.getRole()))
+        );
+
+        // Domain account 접근할 수 있도록 추가
+        this.account = account;
+    }
+
+    public Account getAccount() {
+        return account;
+    }
+}
+~~~
+
+~~~
+AccountService.class
+
+@Override
+public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    Account account = accountRepository.findByUsername(username);
+
+    if (account == null) {
+        throw new UsernameNotFoundException(username);
+    }
+
+    return new UserAccount(account);
+}
+~~~
+
+~~~
+@GetMapping("/user")
+public String user(
+        Model model,
+        @AuthenticationPrincipal
+                UserAccount userAccount
+) {
+    model.addAttribute(
+            "message",
+            "Hello~ user~! :" + userAccount.getAccount().getUsername()
+    );
+    return "user";
+}
+~~~
+
+## 바로 참조하는 방법 
+
+~~~
+@AuthenticationPrincipal(expression = "#this == 'anonymousUser' ? null : account") Account account
+~~~
+
+- 익명 Authentication인 경우 (“anonymousUser”)에는 null 아닌 경우에는 account 필드를 사용한다.
+- Account를 바로 참조할 수 있다.
+
+## 어노테이션으로 정의하기
+
+~~~
+@CurrentUser
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+@AuthenticationPrincipal(expression = "#this == 'anonymousUser' ? null : account")
+public @interface CurrentUser {
+}
+
+@CurrentUser Account account
+~~~
+
+# 스프링 데이터 연동
+
+~~~
+Book.class
+
+@Entity
+public class Book {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String title;
+
+    @ManyToOne
+    private Account author;
+}
+~~~
+
+~~~
+BookRepository.interface
+
+public interface BookRepository extends JpaRepository<Book, Long> {
+
+    @Query("select b from Book b where b.author.id = ?#{principal.account.id}")
+    List<Book> findCurrentUserBooks();
+}
+~~~
+
+~~~
+DefaultDataGenerator.class
+
+@Component
+public class DefaultDataGenerator implements ApplicationRunner {
+
+    private final AccountService accountService;
+    private final BookRepository bookRepository;
+
+    public DefaultDataGenerator(
+            AccountService accountService,
+            BookRepository bookRepository
+    ) {
+        this.accountService = accountService;
+        this.bookRepository = bookRepository;
+    }
+
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        Account jjunpro = createAccount("jjunpro", "123", "USER");
+        Account whiteship = createAccount("whiteship", "123", "USER");
+
+        createBook(jjunpro,"spring");
+        createBook(whiteship,"security");
+    }
+
+    private void createBook(Account jjunpro, String bookTitle) {
+        Book book = new Book();
+        book.setTitle(bookTitle);
+        book.setAuthor(jjunpro);
+        bookRepository.save(book);
+    }
+
+    private Account createAccount(String username, String password, String role) {
+        Account account = new Account();
+        account.setUsername(username);
+        account.setPassword(password);
+        account.setRole(role);
+
+        return accountService.save(account);
+    }
+}
+~~~
+
+~~~
+SampleController.class
+
+@GetMapping("/user")
+public String user(
+        Model model,
+        @AuthenticationPrincipal
+                UserAccount userAccount
+) {
+    model.addAttribute(
+            "message",
+            "Hello~ user~! :" + userAccount
+                    .getAccount()
+                    .getUsername()
+    );
+
+    // 현재 로그인한 유저의 책의 목록을 표시합니다.
+    model.addAttribute("books", bookRepository.findCurrentUserBooks());
+
+    return "user";
+}
+~~~
+
+~~~
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>User</title>
+</head>
+<body>
+    <tr th:each="book : ${books}">
+        <td><span th:text="${book.title}"> Title </span></td>
+    </tr>
+</body>
+</html>
 ~~~

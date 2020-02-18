@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.domain.Account;
+import com.example.project.domain.UserAccount;
 import com.example.project.repository.AccountRepository;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -44,12 +45,13 @@ public class AccountService implements UserDetailsService {
          * @see User
          * */
 
-        return User
-                .builder()
-                .username(account.getUsername())
-                .password(account.getPassword())
-                .roles(account.getRole())
-                .build();
+//        return User
+//                .builder()
+//                .username(account.getUsername())
+//                .password(account.getPassword())
+//                .roles(account.getRole())
+//                .build();
+        return new UserAccount(account);
     }
 
     /**

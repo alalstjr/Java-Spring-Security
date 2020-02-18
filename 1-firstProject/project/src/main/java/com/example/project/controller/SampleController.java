@@ -1,27 +1,32 @@
 package com.example.project.controller;
 
 import com.example.project.context.AccountContext;
+import com.example.project.domain.UserAccount;
 import com.example.project.repository.AccountRepository;
+import com.example.project.repository.BookRepository;
 import com.example.project.service.SampleService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.security.Principal;
-import java.util.jar.Attributes;
 
 @Controller
 public class SampleController {
 
     private final SampleService     sampleService;
     private final AccountRepository accountRepository;
+    private final BookRepository    bookRepository;
 
     public SampleController(
             SampleService sampleService,
-            AccountRepository accountRepository
+            AccountRepository accountRepository,
+            BookRepository bookRepository
     ) {
         this.sampleService = sampleService;
         this.accountRepository = accountRepository;
+        this.bookRepository = bookRepository;
     }
 
     /**
@@ -90,12 +95,19 @@ public class SampleController {
     @GetMapping("/user")
     public String user(
             Model model,
-            Principal principal
+            @AuthenticationPrincipal
+                    UserAccount userAccount
     ) {
         model.addAttribute(
                 "message",
-                "Hello~ user~! :" + principal.getName()
+                "Hello~ user~! :" + userAccount
+                        .getAccount()
+                        .getUsername()
         );
+
+        // 현재 로그인한 유저의 책의 목록을 표시합니다.
+        model.addAttribute("books", bookRepository.findCurrentUserBooks());
+
         return "user";
     }
 
