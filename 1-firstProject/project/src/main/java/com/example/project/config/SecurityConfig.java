@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.filter.LoggingFilter;
 import com.example.project.service.AccountService;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
+import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -202,6 +204,16 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 //                .useSecureCookie(true)
                 //                .alwaysRemember(true)
                 .key("remember-me-sample");
+
+        /**
+         * 커스텀 필터 추가
+         * WebAsyncManagerIntegrationFilter 기존에 맨 앞에 위치한 필터 앞에 커스텀 필터를 넣음으로서
+         * 커스텀 필터가 최상위로 올라왔습니다.
+         * */
+        http.addFilterBefore(
+                new LoggingFilter(),
+                WebAsyncManagerIntegrationFilter.class
+        );
     }
 
     // 인메모리 유저 생성 방법

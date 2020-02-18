@@ -46,6 +46,7 @@
 - [30. 인증/인가 예외 처리 필터 ExceptionTranslationFilter](#인증/인가-예외-처리-필터-ExceptionTranslationFilter)
 - [31. 인가 처리 필터 FilterSecurityInterceptor](#인가-처리-필터-FilterSecurityInterceptor)
 - [32. 토큰 기반 인증 필터 RememberMeAuthenticationFilter](#토큰-기반-인증-필터-RememberMeAuthenticationFilter)
+- [33. 커스텀 필터 추가하기](#커스텀-필터-추가하기)
 
 # Spring Security 적용
 
@@ -1945,4 +1946,43 @@ if (SecurityContextHolder.getContext().getAuthentication() == null) {
     }
 }
 
+~~~
+
+# 커스텀 필터 추가하기
+
+Spring 친화적으로 만들어 놓은 GenericFilterBean 상위클래스를 상속받으면 doFilter 만 상속받아 사용하면 됩니다.
+
+~~~
+public class LoggingFilter extends GenericFilterBean {
+
+    private Logger log = LoggerFactory.getLogger(this.getClass());
+
+    @Override
+    public void doFilter(
+            ServletRequest request,
+            ServletResponse response,
+            FilterChain chain
+    ) throws IOException, ServletException {
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start(((HttpServletRequest)request).getRequestURI());
+
+        // 다음 Filter로 넘어가도록 요청을 넘겨줍니다.
+        chain.doFilter(request,response);
+
+        stopWatch.stop();
+        log.info(stopWatch.prettyPrint());
+    }
+}
+~~~
+
+~~~
+/**
+* 커스텀 필터 추가
+* WebAsyncManagerIntegrationFilter 기존에 맨 앞에 위치한 필터 앞에 커스텀 필터를 넣음으로서
+* 커스텀 필터가 최상위로 올라왔습니다.
+* */
+http.addFilterBefore(
+        new LoggingFilter(),
+        WebAsyncManagerIntegrationFilter.class
+);
 ~~~
